@@ -1,12 +1,12 @@
 <?php
 
-namespace VendorName\Skeleton\Commands;
+namespace AdamczykPiotr\DagWorkflows\Commands;
 
 use Illuminate\Console\Command;
 
-class SkeletonCommand extends Command
+class DagWorkflowsCommand extends Command
 {
-    public $signature = 'skeleton';
+    public $signature = 'dag-workflows';
 
     public $description = 'My command';
 

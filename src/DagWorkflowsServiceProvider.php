@@ -4,10 +4,13 @@ namespace AdamczykPiotr\DagWorkflows;
 
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use AdamczykPiotr\DagWorkflows\Commands\DagWorkflowsCommand;
 
 class DagWorkflowsServiceProvider extends PackageServiceProvider
 {
+    /**
+     * @param Package $package
+     * @return void
+     */
     public function configurePackage(Package $package): void
     {
         /*
@@ -17,9 +20,6 @@ class DagWorkflowsServiceProvider extends PackageServiceProvider
          */
         $package
             ->name('dag-workflows')
-            ->hasConfigFile()
-            ->hasViews()
-            ->hasMigration('create_dag_workflows_table')
-            ->hasCommand(DagWorkflowsCommand::class);
+            ->hasMigrations('create_dag_workflows_table');
     }
 }

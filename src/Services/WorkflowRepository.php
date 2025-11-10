@@ -9,8 +9,8 @@ use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
-use DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class WorkflowRepository {
@@ -71,11 +71,13 @@ class WorkflowRepository {
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
             ->pluck(WorkflowTask::ATTRIBUTE_ID, WorkflowTask::ATTRIBUTE_NAME);
 
-        $steps = $taskDtos->map(function(TaskDto $taskDto) use ($mapping) {
+        $steps = $taskDtos->map(function(TaskDto $taskDto) use ($mapping, $workflow) {
             $taskId = $mapping->get($taskDto->name);
-            return collect($taskDto->steps)->map(function(TaskStepDto $stepDto) use ($taskId) {
+            $workflowId = $workflow->id;
+            return collect($taskDto->steps)->map(function(TaskStepDto $stepDto) use ($taskId, $workflowId) {
                 return [
                     WorkflowTaskStep::ATTRIBUTE_TASK_ID => $taskId,
+                    WorkflowTaskStep::ATTRIBUTE_WORKFLOW_ID => $workflowId,
                     WorkflowTaskStep::ATTRIBUTE_ORDER => $stepDto->order,
                     WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PENDING,
                     WorkflowTaskStep::ATTRIBUTE_STARTED_AT => null,

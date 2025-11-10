@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $task_id
+ * @property int $workflow_id
  * @property int $order
  * @property RunStatus $status
  * @property Carbon|null $started_at
@@ -32,6 +33,7 @@ class WorkflowTaskStep extends BaseModel {
 
     const string ATTRIBUTE_ID = 'id';
     const string ATTRIBUTE_TASK_ID = 'task_id';
+    const string ATTRIBUTE_WORKFLOW_ID = 'workflow_id';
     const string ATTRIBUTE_ORDER = 'order';
     const string ATTRIBUTE_STATUS = 'status';
     const string ATTRIBUTE_STARTED_AT = 'started_at';
@@ -64,6 +66,14 @@ class WorkflowTaskStep extends BaseModel {
      */
     public function task(): BelongsTo {
         return $this->belongsTo(WorkflowTask::class, self::ATTRIBUTE_TASK_ID);
+    }
+
+
+    /**
+     * @return BelongsTo<Workflow, $this>
+     */
+    public function workflow(): BelongsTo {
+        return $this->belongsTo(Workflow::class, self::ATTRIBUTE_WORKFLOW_ID);
     }
 
 

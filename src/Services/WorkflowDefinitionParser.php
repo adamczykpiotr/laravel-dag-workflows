@@ -61,12 +61,14 @@ class WorkflowDefinitionParser {
 
         // Merge dependencies
         $tasks = $tasks->map(function(Task $task) use ($definition) {
+            /** @var array<int, string> $dependencies */
             $dependencies = Collection::wrap($task->dependsOn)
-                ->merge($definition->dependsOn)
+                ->merge(Collection::wrap($definition->dependsOn))
                 ->unique()
-                ->values();
+                ->values()
+                ->toArray();
 
-            $task->dependsOn = $dependencies->toArray();
+            $task->dependsOn = $dependencies;
             return $task;
         });
 
@@ -138,7 +140,7 @@ class WorkflowDefinitionParser {
 
             $recursionStack->put($taskName, true);
 
-            $dependencies = $namedTasks->get($taskName)->dependsOn;
+            $dependencies = $namedTasks->get($taskName)->dependsOn ?? collect();
             $dependencies->each(fn(string $dependency) => $checkForCycles($dependency));
 
             $recursionStack->pull($taskName);

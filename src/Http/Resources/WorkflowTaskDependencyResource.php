@@ -13,8 +13,8 @@ class WorkflowTaskDependencyResource extends JsonResource {
 
     /**
      * @param Request $request
-     * @return array
-     */
+     * @return array<string, mixed>
+ */
     public function toArray(Request $request): array {
         return [
             'parentTaskId' => $this->id,

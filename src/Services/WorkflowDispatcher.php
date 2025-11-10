@@ -6,18 +6,15 @@ use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
-use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
-use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Database\Eloquent\Builder as BuilderContract;
 
-class WorkflowDispatcher
-{
+class WorkflowDispatcher {
+
     /**
      * @param Workflow $workflow
      * @return void
      */
-    public function dispatchWorkflow(Workflow $workflow): void
-    {
+    public function dispatchWorkflow(Workflow $workflow): void {
         $entrypoint = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
             ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
@@ -37,14 +34,18 @@ class WorkflowDispatcher
         $entrypoint->each(fn(WorkflowTask $task) => $this->dispatchTask($task));
     }
 
+
     /**
      * @param WorkflowTask $task
      * @return void
      */
-    public function dispatchTask(WorkflowTask $task): void
-    {
+    public function dispatchTask(WorkflowTask $task): void {
         // Prevent overlaps
         if ($task->status !== RunStatus::PENDING) {
+            return;
+        }
+
+        if ($task->initialStep === null) {
             return;
         }
 
@@ -54,8 +55,7 @@ class WorkflowDispatcher
         $task->completed_at = null;
         $task->save();
 
-        $initialStep = $task->initialStep;
-        $this->dispatchStep($initialStep);
+        $this->dispatchStep($task->initialStep);
     }
 
 
@@ -63,13 +63,12 @@ class WorkflowDispatcher
      * @param WorkflowTask $task
      * @return void
      */
-    public function dispatchDependantTasks(WorkflowTask $task): void
-    {
+    public function dispatchDependantTasks(WorkflowTask $task): void {
         $dependantTasks = $task->dependants()
             ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
             ->whereDoesntHave(
                 WorkflowTask::RELATION_DEPENDENCIES,
-                fn(BuilderContract $builder) => $builder->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
+                fn(BuilderContract $builder) => $builder->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED) // @phpstan-ignore-line
             )
             ->with(WorkflowTask::RELATION_INITIAL_STEP)
             ->get();
@@ -82,8 +81,7 @@ class WorkflowDispatcher
      * @param WorkflowTaskStep $step
      * @return void
      */
-    public function dispatchStep(WorkflowTaskStep $step): void
-    {
+    public function dispatchStep(WorkflowTaskStep $step): void {
         // Prevent overlaps
         if ($step->status !== RunStatus::PENDING) {
             return;
@@ -91,12 +89,12 @@ class WorkflowDispatcher
 
         // Status will be updated when job will be picked up by queue worker
 
-        /** @var object $job */
+        /** @var object{workflowTaskStep: WorkflowTaskStep} $job */
         $job = unserialize(
             base64_decode($step->payload)
         );
 
-        $job->workflowTaskStep = $step;
+        $job->workflowTaskStep = $step; // @phpstan-ignore-line
         dispatch($job);
     }
 }

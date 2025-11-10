@@ -6,7 +6,6 @@ use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
-use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
 use Closure;
 use DB;
 use Illuminate\Support\Collection;
@@ -34,7 +33,7 @@ class DagWorkflowTrackerJobMiddleware {
 
         // Already processed or cancelled due to other failures
         if ($step->status !== RunStatus::PENDING) {
-            $job->fail();
+            $job->fail(); // @phpstan-ignore-line
             return $next($job);
         }
 
@@ -164,7 +163,7 @@ class DagWorkflowTrackerJobMiddleware {
     /**
      * @param WorkflowTask $task
      * @param int $level
-     * @return Collection
+     * @return Collection<int, int>
      */
     protected function retrieveRecursiveDependants(WorkflowTask $task, int $level = 0): Collection {
         $ids = collect($level === 0 ? [] : [$task->id]);

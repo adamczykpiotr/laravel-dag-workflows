@@ -1,9 +1,9 @@
 # dag-workflows
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/adamczykpiotr/dag-workflows.svg?style=flat-square)](https://packagist.org/packages/adamczykpiotr/dag-workflows)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/adamczykpiotr/dag-workflows/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/adamczykpiotr/dag-workflows/actions?query=workflow%3Arun-tests+branch%3Amain)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/adamczykpiotr/dag-workflows/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/adamczykpiotr/dag-workflows/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
-[![Total Downloads](https://img.shields.io/packagist/dt/adamczykpiotr/dag-workflows.svg?style=flat-square)](https://packagist.org/packages/adamczykpiotr/dag-workflows)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/adamczykpiotr/laravel-dag-workflows.svg?style=flat-square)](https://packagist.org/packages/adamczykpiotr/laravel-dag-workflows)
+[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/adamczykpiotr/laravel-dag-workflows/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/adamczykpiotr/laravel-dag-workflows/actions?query=workflow%3Arun-tests+branch%3Amain)
+[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/adamczykpiotr/laravel-dag-workflows/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/adamczykpiotr/laravel-dag-workflows/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
+[![Total Downloads](https://img.shields.io/packagist/dt/adamczykpiotr/laravel-dag-workflows.svg?style=flat-square)](https://packagist.org/packages/adamczykpiotr/laravel-dag-workflows)
 
 A lightweight library to define and dispatch directed acyclic graph (DAG) based workflows composed of Tasks and TaskGroups. Each Task can contain one or more jobs and may declare
 dependencies on other tasks. This package helps model, persist and execute complex multi-step workflows in Laravel applications.
@@ -20,7 +20,7 @@ Key features:
 Install the package via Composer and run migrations:
 
 ```bash
-composer require adamczykpiotr/dag-workflows
+composer require adamczykpiotr/laravel-dag-workflows
 php artisan vendor:publish --tag="dag-workflows-migrations"
 php artisan migrate
 ```

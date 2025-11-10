@@ -10,6 +10,7 @@ use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
 use Closure;
 use DB;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Collection;
 use Throwable;
 
 class DagWorkflowTrackerJobMiddleware {
@@ -140,10 +141,9 @@ class DagWorkflowTrackerJobMiddleware {
                     WorkflowTaskStep::ATTRIBUTE_FAILED_AT => now(),
                 ]);
 
-            // Cancel dependant tasks & their steps
-            $cancelledTaskIds = $task->dependants()
-                ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
-                ->pluck(WorkflowTaskStep::ATTRIBUTE_ID);
+            // Cancel dependant tasks (all levels deep) & their steps
+            $task->load(WorkflowTask::RELATION_RECURSIVE_DEPENDANTS);
+            $cancelledTaskIds = $this->retrieveRecursiveDependants($task);
 
             WorkflowTask::query()
                 ->whereIn(WorkflowTask::ATTRIBUTE_ID, $cancelledTaskIds)
@@ -160,4 +160,21 @@ class DagWorkflowTrackerJobMiddleware {
                 ]);
         });
     }
+
+
+    /**
+     * @param WorkflowTask $task
+     * @param int $level
+     * @return Collection
+     */
+    protected function retrieveRecursiveDependants(WorkflowTask $task, int $level = 0): Collection {
+        $ids = collect($level === 0 ? [] : [$task->id]);
+
+        foreach ($task->recursiveDependants as $dependency) {
+            $ids->push(...$this->retrieveRecursiveDependants($dependency, $level + 1));
+        }
+
+        return $ids;
+    }
 }
+

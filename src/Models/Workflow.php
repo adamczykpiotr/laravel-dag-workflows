@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
+
 /**
  * @property int $id
  * @property string $name
@@ -27,8 +28,7 @@ use Illuminate\Support\Carbon;
  * @method static Builder<static>|Workflow query()
  * @mixin Eloquent
  */
-class Workflow extends BaseModel
-{
+class Workflow extends BaseModel {
 
     const string ATTRIBUTE_ID = 'id';
     const string ATTRIBUTE_NAME = 'name';
@@ -41,11 +41,11 @@ class Workflow extends BaseModel
 
     const string RELATION_TASKS = 'tasks';
 
+
     /**
      * @return array<string, string>
      */
-    public function casts(): array
-    {
+    public function casts(): array {
         return [
             self::ATTRIBUTE_STATUS => RunStatus::class,
             self::ATTRIBUTE_STARTED_AT => 'datetime',
@@ -54,25 +54,26 @@ class Workflow extends BaseModel
         ];
     }
 
+
     /**
      * @return HasMany<$this, WorkflowTask>
      */
-    public function tasks(): HasMany
-    {
-        return $this->hasMany(WorkflowTask::class, WorkflowTask::ATTRIBUTE_WORKFLOW_ID);
+    public function tasks(): HasMany {
+        return $this->hasMany(WorkflowTask::class, WorkflowTask::ATTRIBUTE_WORKFLOW_ID)
+            ->orderBy(WorkflowTask::ATTRIBUTE_ID);
     }
 
 
     // Helper
 
+
     /**
      * @return void
      * @throws BindingResolutionException
      */
-    public function dispatch(): void
-    {
+    public function dispatch(): void {
+        /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = app()->make(WorkflowDispatcher::class);
         $dispatcher->dispatchWorkflow($this);
     }
-
 }

@@ -12,28 +12,34 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
+
 /**
  * @property int $id
  * @property int $workflow_id
  * @property string $name
  * @property RunStatus $status
  * @property Carbon|null $started_at
- * @property Carbon|null $failed_at-=
+ * @property Carbon|null $failed_at
  * @property Carbon|null $completed_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Workflow $workflow
- * @property-read Collection<int, WorkflowTaskStep> $steps
- * @property-read WorkflowTaskStep|null $initialStep
- * @property-read Collection<int, WorkflowTask> $dependencies
  * @property-read Collection<int, WorkflowTask> $dependants
+ * @property-read int|null $dependants_count
+ * @property-read Collection<int, WorkflowTask> $dependencies
+ * @property-read int|null $dependencies_count
+ * @property-read WorkflowTaskStep|null $initialStep
+ * @property-read Collection<int, WorkflowTask> $recursiveDependants
+ * @property-read int|null $recursive_dependants_count
+ * @property-read Collection<int, WorkflowTaskStep> $steps
+ * @property-read int|null $steps_count
+ * @property-read Workflow $workflow
  * @method static Builder<static>|WorkflowTask newModelQuery()
  * @method static Builder<static>|WorkflowTask newQuery()
  * @method static Builder<static>|WorkflowTask query()
  * @mixin Eloquent
  */
-class WorkflowTask extends BaseModel
-{
+class WorkflowTask extends BaseModel {
+
     const string ATTRIBUTE_ID = 'id';
     const string ATTRIBUTE_WORKFLOW_ID = 'workflow_id';
     const string ATTRIBUTE_NAME = 'name';
@@ -49,6 +55,7 @@ class WorkflowTask extends BaseModel
     const string RELATION_INITIAL_STEP = 'initialStep';
     const string RELATION_DEPENDENCIES = 'dependencies';
     const string RELATION_DEPENDANTS = 'dependants';
+    const string RELATION_RECURSIVE_DEPENDANTS = 'recursiveDependants';
 
     const string PIVOT_DEPENDENCIES_TABLE = 'workflow_task_dependencies';
     const string PIVOT_COLUMN_TASK_ID = 'task_id';
@@ -58,8 +65,7 @@ class WorkflowTask extends BaseModel
     /**
      * @return array<string, string>
      */
-    public function casts(): array
-    {
+    public function casts(): array {
         return [
             self::ATTRIBUTE_STATUS => RunStatus::class,
             self::ATTRIBUTE_STARTED_AT => 'datetime',
@@ -68,55 +74,64 @@ class WorkflowTask extends BaseModel
         ];
     }
 
+
     /**
      * @return BelongsTo<$this, Workflow>
      */
-    public function workflow(): BelongsTo
-    {
+    public function workflow(): BelongsTo {
         return $this->belongsTo(Workflow::class);
     }
+
 
     /**
      * @return HasMany<$this, WorkflowTaskStep>
      */
-    public function steps(): HasMany
-    {
+    public function steps(): HasMany {
         return $this->hasMany(WorkflowTaskStep::class, WorkflowTaskStep::ATTRIBUTE_TASK_ID)
             ->orderBy(WorkflowTaskStep::ATTRIBUTE_ORDER);
     }
 
+
     /**
      * @return HasOne
      */
-    public function initialStep(): HasOne
-    {
+    public function initialStep(): HasOne {
         return $this->hasOne(WorkflowTaskStep::class, WorkflowTaskStep::ATTRIBUTE_TASK_ID)
             ->where(WorkflowTaskStep::ATTRIBUTE_ORDER, 1);
     }
 
+
     /**
      * @return BelongsToMany<WorkflowTask>
      */
-    public function dependencies(): BelongsToMany
-    {
+    public function dependencies(): BelongsToMany {
         return $this->belongsToMany(
             WorkflowTask::class,
             self::PIVOT_DEPENDENCIES_TABLE,
             self::PIVOT_COLUMN_TASK_ID,
             self::PIVOT_COLUMN_DEPENDANT_TASK_ID
-        );
+        )->orderBy(WorkflowTask::ATTRIBUTE_ID);
     }
+
 
     /**
      * @return BelongsToMany<WorkflowTask>
      */
-    public function dependants(): BelongsToMany
-    {
+    public function dependants(): BelongsToMany {
         return $this->belongsToMany(
             WorkflowTask::class,
             self::PIVOT_DEPENDENCIES_TABLE,
             self::PIVOT_COLUMN_DEPENDANT_TASK_ID,
             self::PIVOT_COLUMN_TASK_ID
         );
+    }
+
+
+    /**
+     * @return BelongsToMany
+     */
+    public function recursiveDependants(): BelongsToMany {
+        return $this->dependants()
+            ->with(self::RELATION_RECURSIVE_DEPENDANTS);
     }
 }

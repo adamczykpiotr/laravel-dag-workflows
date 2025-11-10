@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
+
 /**
  * @property int $id
  * @property int $task_id
@@ -20,16 +21,15 @@ use Illuminate\Support\Carbon;
  * @property string $payload
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Workflow $workflow
- * @property-read WorkflowTask $task
  * @property-read WorkflowTaskStep|null $nextStep
+ * @property-read WorkflowTask $task
  * @method static Builder<static>|WorkflowTaskStep newModelQuery()
  * @method static Builder<static>|WorkflowTaskStep newQuery()
  * @method static Builder<static>|WorkflowTaskStep query()
  * @mixin Eloquent
  */
-class WorkflowTaskStep extends BaseModel
-{
+class WorkflowTaskStep extends BaseModel {
+
     const string ATTRIBUTE_ID = 'id';
     const string ATTRIBUTE_TASK_ID = 'task_id';
     const string ATTRIBUTE_ORDER = 'order';
@@ -45,41 +45,32 @@ class WorkflowTaskStep extends BaseModel
     const string RELATION_WORKFLOW = 'workflow';
     const string RELATION_NEXT_STEP = 'nextStep';
 
+
     /**
      * @return array<string, string>
      */
-    public function casts(): array
-    {
+    public function casts(): array {
         return [
             self::ATTRIBUTE_STATUS => RunStatus::class,
             self::ATTRIBUTE_STARTED_AT => 'datetime',
             self::ATTRIBUTE_FAILED_AT => 'datetime',
             self::ATTRIBUTE_COMPLETED_AT => 'datetime',
-//            self::ATTRIBUTE_PAYLOAD => QueuedJobCaster::class
         ];
     }
 
-    /**
-     * @return BelongsTo<$this, Workflow>
-     */
-    public function workflow(): BelongsTo
-    {
-        return $this->belongsTo(Workflow::class);
-    }
 
     /**
      * @return BelongsTo<WorkflowTask>
      */
-    public function task(): BelongsTo
-    {
+    public function task(): BelongsTo {
         return $this->belongsTo(WorkflowTask::class, self::ATTRIBUTE_TASK_ID);
     }
+
 
     /**
      * @return HasOne<WorkflowTaskStep>
      */
-    public function nextStep(): HasOne
-    {
+    public function nextStep(): HasOne {
         return $this->hasOne(WorkflowTaskStep::class, self::ATTRIBUTE_TASK_ID, self::ATTRIBUTE_TASK_ID)
             ->where(self::ATTRIBUTE_ORDER, $this->order + 1);
     }

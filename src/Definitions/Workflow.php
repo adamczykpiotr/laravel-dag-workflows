@@ -7,6 +7,7 @@ use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskDuplicateNameException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskMissingTrackingTraitException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskUnresolvedDependencyException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskWithoutJobException;
+use AdamczykPiotr\DagWorkflows\Models\Workflow as WorkflowModel;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDefinitionParser;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowRepository;
 use Illuminate\Contracts\Container\BindingResolutionException;
@@ -26,7 +27,7 @@ class Workflow {
 
 
     /**
-     * @return void
+     * @return WorkflowModel
      * @throws BindingResolutionException
      * @throws WorkflowTaskCircularDependencyException
      * @throws WorkflowTaskMissingTrackingTraitException
@@ -35,7 +36,7 @@ class Workflow {
      * @throws WorkflowTaskDuplicateNameException
      * @throws Throwable
      */
-    public function dispatch(): void {
+    public function dispatch(): WorkflowModel {
         /** @var WorkflowDefinitionParser $parser */
         $parser = app()->make(WorkflowDefinitionParser::class);
         $workflow = $parser->parse($this);
@@ -44,5 +45,6 @@ class Workflow {
         $model = $repository->store($workflow);
 
         $model->dispatch();
+        return $model;
     }
 }

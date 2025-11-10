@@ -7,7 +7,7 @@ use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use Closure;
-use DB;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 use Throwable;
 

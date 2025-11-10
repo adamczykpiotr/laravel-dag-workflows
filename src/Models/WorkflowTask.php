@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Carbon;
 
 
@@ -76,7 +77,7 @@ class WorkflowTask extends BaseModel {
 
 
     /**
-     * @return BelongsTo<$this, Workflow>
+     * @return BelongsTo<Workflow, $this>
      */
     public function workflow(): BelongsTo {
         return $this->belongsTo(Workflow::class);
@@ -84,7 +85,7 @@ class WorkflowTask extends BaseModel {
 
 
     /**
-     * @return HasMany<$this, WorkflowTaskStep>
+     * @return HasMany<WorkflowTaskStep, $this>
      */
     public function steps(): HasMany {
         return $this->hasMany(WorkflowTaskStep::class, WorkflowTaskStep::ATTRIBUTE_TASK_ID)
@@ -93,7 +94,7 @@ class WorkflowTask extends BaseModel {
 
 
     /**
-     * @return HasOne
+     * @return HasOne<WorkflowTaskStep, $this>
      */
     public function initialStep(): HasOne {
         return $this->hasOne(WorkflowTaskStep::class, WorkflowTaskStep::ATTRIBUTE_TASK_ID)
@@ -102,7 +103,7 @@ class WorkflowTask extends BaseModel {
 
 
     /**
-     * @return BelongsToMany<WorkflowTask>
+     * @return BelongsToMany<WorkflowTask, $this, Pivot>
      */
     public function dependencies(): BelongsToMany {
         return $this->belongsToMany(
@@ -115,7 +116,7 @@ class WorkflowTask extends BaseModel {
 
 
     /**
-     * @return BelongsToMany<WorkflowTask>
+     * @return BelongsToMany<WorkflowTask, $this, Pivot>
      */
     public function dependants(): BelongsToMany {
         return $this->belongsToMany(
@@ -128,7 +129,7 @@ class WorkflowTask extends BaseModel {
 
 
     /**
-     * @return BelongsToMany
+     * @return BelongsToMany<WorkflowTask, $this, Pivot>
      */
     public function recursiveDependants(): BelongsToMany {
         return $this->dependants()

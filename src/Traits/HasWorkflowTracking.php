@@ -6,18 +6,18 @@ use AdamczykPiotr\DagWorkflows\Middlewares\DagWorkflowTrackerJobMiddleware;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use Illuminate\Contracts\Container\BindingResolutionException;
 
-trait HasWorkflowTracking
-{
+trait HasWorkflowTracking {
+
     public WorkflowTaskStep $workflowTaskStep;
+
 
     /**
      * @return array<int, object>
      * @throws BindingResolutionException
      */
-    public function middleware(): array
-    {
+    public function middleware(): array {
         return [
-            app()->make(DagWorkflowTrackerJobMiddleware::class)
+            app()->make(DagWorkflowTrackerJobMiddleware::class),
         ];
     }
 }

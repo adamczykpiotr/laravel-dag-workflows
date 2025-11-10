@@ -9,7 +9,6 @@ use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
 use Closure;
 use DB;
-use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Collection;
 use Throwable;
 
@@ -25,12 +24,12 @@ class DagWorkflowTrackerJobMiddleware {
 
 
     /**
-     * @param Queueable&HasWorkflowTracking $job
+     * @param object{workflowTaskStep: WorkflowTaskStep} $job
      * @param Closure $next
      * @return mixed
      * @throws Throwable
      */
-    public function handle($job, Closure $next): mixed {
+    public function handle(object $job, Closure $next): mixed {
         $step = $job->workflowTaskStep;
 
         // Already processed or cancelled due to other failures
@@ -177,4 +176,3 @@ class DagWorkflowTrackerJobMiddleware {
         return $ids;
     }
 }
-

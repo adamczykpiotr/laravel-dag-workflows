@@ -60,7 +60,7 @@ class WorkflowTaskStep extends BaseModel {
 
 
     /**
-     * @return BelongsTo<WorkflowTask>
+     * @return BelongsTo<WorkflowTask, $this>
      */
     public function task(): BelongsTo {
         return $this->belongsTo(WorkflowTask::class, self::ATTRIBUTE_TASK_ID);
@@ -68,7 +68,7 @@ class WorkflowTaskStep extends BaseModel {
 
 
     /**
-     * @return HasOne<WorkflowTaskStep>
+     * @return HasOne<WorkflowTaskStep, $this>
      */
     public function nextStep(): HasOne {
         return $this->hasOne(WorkflowTaskStep::class, self::ATTRIBUTE_TASK_ID, self::ATTRIBUTE_TASK_ID)

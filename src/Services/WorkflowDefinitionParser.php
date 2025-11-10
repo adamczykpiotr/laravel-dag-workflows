@@ -28,8 +28,9 @@ class WorkflowDefinitionParser {
      * @throws WorkflowTaskDuplicateNameException
      */
     public function parse(Workflow $definition): WorkflowDto {
+        /** @var Collection<int, TaskDto> $tasks */
         $tasks = collect($definition->tasks)
-            ->filter(fn($task) => $task instanceof Task || $task instanceof TaskGroup)
+            ->filter(fn($task) => $task instanceof Task || $task instanceof TaskGroup) // @phpstan-ignore-line
             ->map(fn(Task|TaskGroup $task) => ($task instanceof Task)
                 ? collect([$this->parseTask($task)])
                 : $this->parseTaskGroup($task)
@@ -55,7 +56,7 @@ class WorkflowDefinitionParser {
      */
     protected function parseTaskGroup(TaskGroup $definition): Collection {
         $tasks = Collection::wrap($definition->tasks)
-            ->filter(fn($task) => $task instanceof Task)
+            ->filter(fn($task) => $task instanceof Task) // @phpstan-ignore-line
             ->values();
 
         // Merge dependencies
@@ -81,7 +82,7 @@ class WorkflowDefinitionParser {
      */
     protected function parseTask(Task $definition): TaskDto {
         $jobs = Collection::wrap($definition->jobs)
-            ->filter(fn($job) => is_object($job))
+            ->filter(fn($job) => is_object($job))  // @phpstan-ignore-line
             ->values();
 
         if ($jobs->isEmpty()) {

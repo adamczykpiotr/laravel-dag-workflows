@@ -56,7 +56,7 @@ class Workflow extends BaseModel {
 
 
     /**
-     * @return HasMany<$this, WorkflowTask>
+     * @return HasMany<WorkflowTask, $this>
      */
     public function tasks(): HasMany {
         return $this->hasMany(WorkflowTask::class, WorkflowTask::ATTRIBUTE_WORKFLOW_ID)

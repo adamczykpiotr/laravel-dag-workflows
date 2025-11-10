@@ -91,7 +91,7 @@ class WorkflowDispatcher
 
         // Status will be updated when job will be picked up by queue worker
 
-        /** @var Queueable&HasWorkflowTracking $job */
+        /** @var object $job */
         $job = unserialize(
             base64_decode($step->payload)
         );

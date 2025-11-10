@@ -94,9 +94,7 @@ class WorkflowDefinitionParser {
         }
 
         foreach ($jobs as $job) {
-            $usedTraits = class_uses($job);
-
-            if (in_array(HasWorkflowTracking::class, $usedTraits) === false) {
+            if ($this->usesTrait($job, HasWorkflowTracking::class) === false) {
                 $class = get_class($job);
                 throw new WorkflowTaskMissingTrackingTraitException(
                     "Task {$definition->name} contains a job of class {$class} which does not use required HasWorkflowTracking trait."
@@ -178,6 +176,27 @@ class WorkflowDefinitionParser {
                         "Task {$taskName} has an unresolved dependency on task {$dependency}."
                     );
                 }
+            }
+        }
+    }
+
+
+    /**
+     * @param object|class-string $class
+     * @param class-string $trait
+     * @return bool
+     */
+    protected function usesTrait(object|string $class, string $trait): bool {
+        while (true) {
+            $traits = class_uses($class);
+
+            if (in_array($trait, $traits)) {
+                return true;
+            }
+
+            $class = get_parent_class($class);
+            if ($class === false) {
+                return false;
             }
         }
     }

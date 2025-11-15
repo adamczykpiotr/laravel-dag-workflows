@@ -27,10 +27,6 @@ class WorkflowDispatcher {
             return;
         }
 
-        $workflow->status = RunStatus::RUNNING;
-        $workflow->started_at = now();
-        $workflow->save();
-
         $entrypoint->each(fn(WorkflowTask $task) => $this->dispatchTask($task));
     }
 
@@ -48,12 +44,6 @@ class WorkflowDispatcher {
         if ($task->initialStep === null) {
             return;
         }
-
-        $task->status = RunStatus::RUNNING;
-        $task->started_at = now();
-        $task->failed_at = null;
-        $task->completed_at = null;
-        $task->save();
 
         $this->dispatchStep($task->initialStep);
     }

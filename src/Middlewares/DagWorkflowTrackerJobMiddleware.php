@@ -7,8 +7,8 @@ use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use Closure;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class DagWorkflowTrackerJobMiddleware {
@@ -55,13 +55,38 @@ class DagWorkflowTrackerJobMiddleware {
     /**
      * @param WorkflowTaskStep $step
      * @return void
+     * @throws Throwable
      */
     protected function beginWorkflowTaskStep(WorkflowTaskStep $step): void {
         $step->status = RunStatus::RUNNING;
         $step->started_at = now();
         $step->failed_at = null;
         $step->completed_at = null;
-        $step->save();
+
+        if ($step->order > 1) {
+            $step->save();
+            return;
+        }
+
+        DB::transaction(function() use ($step) {
+            $step->save();
+
+            $task = $step->task;
+            $task->status = RunStatus::PENDING;
+            $task->started_at = now();
+            $task->failed_at = null;
+            $task->completed_at = null;
+            $task->save();
+
+            $workflow = $task->workflow;
+            if ($workflow->status === RunStatus::PENDING) {
+                $workflow->status = RunStatus::RUNNING;
+                $workflow->started_at = now();
+                $workflow->failed_at = null;
+                $workflow->completed_at = null;
+                $workflow->save();
+            }
+        });
     }
 
 

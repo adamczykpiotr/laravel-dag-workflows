@@ -2,16 +2,20 @@
 
 namespace AdamczykPiotr\DagWorkflows\Definitions;
 
-class Task {
+class ResolvableTask {
 
     /**
+     * @template TEntry
+     *
      * @param string $name
-     * @param object|array $jobs
+     * @param callable(): iterable<TEntry> $items
+     * @param callable(TEntry):object|array<object> $jobs
      * @param string|array<int, string> $dependsOn
      */
     public function __construct(
         public string $name,
-        public object|array $jobs,
+        public mixed $items,
+        public mixed $jobs,
         public string|array $dependsOn = [],
     ) {
     }

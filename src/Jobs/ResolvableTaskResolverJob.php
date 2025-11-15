@@ -29,7 +29,7 @@ class ResolvableTaskResolverJob implements ShouldQueue {
      */
     public function __construct(
         protected string $name,
-        protected array $dependsOn,
+        protected string|array $dependsOn,
         protected SerializableClosure $itemProvider,
         protected SerializableClosure $jobProvider,
     ) {
@@ -37,7 +37,6 @@ class ResolvableTaskResolverJob implements ShouldQueue {
 
 
     /**
-     * @template TEntry
      * @param WorkflowDefinitionParser $definitionParser
      * @param WorkflowRepository $workflowRepository
      * @return void
@@ -47,14 +46,14 @@ class ResolvableTaskResolverJob implements ShouldQueue {
         WorkflowDefinitionParser $definitionParser,
         WorkflowRepository $workflowRepository
     ): void {
-        /** @var callable():iterable<TEntry> $provider */
+        /** @var callable():array<int|string,mixed> $provider */
         $provider = $this->itemProvider->getClosure();
         $items = $provider();
 
-        /** @var callable(TEntry): array $jobProvider */
+        /** @var callable(mixed): (object|array<int, object>) $jobProvider */
         $jobProvider = $this->jobProvider->getClosure();
 
-        /** @var Collection<int, Task> $definitions */
+        /** @var Collection<int|string, Task> $definitions */
         $definitions = collect($items)->map(function($item, string|int $key) use ($jobProvider) {
             return new Task(
                 name: "{$this->name}:{$key}",
@@ -63,9 +62,9 @@ class ResolvableTaskResolverJob implements ShouldQueue {
             );
         });
 
-        $tasks = $definitionParser->parseTasksFromResolvable($definitions);
+        $tasks = $definitionParser->parseTasksFromResolvable($definitions->values());
 
-        $workflow = Workflow::findOrFail($this->getWorkflowId());
+        $workflow = Workflow::query()->findOrFail($this->getWorkflowId());
         $workflowRepository->appendTasks($workflow, $tasks);
     }
 }

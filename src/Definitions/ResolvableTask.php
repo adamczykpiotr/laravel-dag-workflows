@@ -9,7 +9,7 @@ class ResolvableTask {
      *
      * @param string $name
      * @param callable(): iterable<TEntry> $items
-     * @param callable(TEntry):object|array<object> $jobs
+     * @param callable(): object|array<int, object> $jobs
      * @param string|array<int, string> $dependsOn
      */
     public function __construct(

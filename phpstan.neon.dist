@@ -9,5 +9,3 @@ parameters:
     tmpDir: build/phpstan
     checkOctaneCompatibility: true
     checkModelProperties: true
-    ignoreErrors:
-        - '#Trait AdamczykPiotr\\DagWorkflows\\Traits\\HasWorkflowTracking is used zero times and is not analysed\.#'

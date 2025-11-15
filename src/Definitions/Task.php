@@ -6,7 +6,7 @@ class Task {
 
     /**
      * @param string $name
-     * @param object|array $jobs
+     * @param object|array<int, object> $jobs
      * @param string|array<int, string> $dependsOn
      */
     public function __construct(

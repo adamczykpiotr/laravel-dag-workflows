@@ -32,7 +32,7 @@ class WorkflowRepository {
 
     /**
      * @param Workflow $workflow
-     * @param Collection $taskDtos
+     * @param Collection<int, TaskDto> $taskDtos
      * @return void
      * @throws Throwable
      */

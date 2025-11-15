@@ -16,6 +16,7 @@ use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskUnresolvedDependencyExcept
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskWithoutJobException;
 use AdamczykPiotr\DagWorkflows\Jobs\ResolvableTaskResolverJob;
 use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
+use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\SerializableClosure\SerializableClosure;
@@ -39,6 +40,7 @@ class WorkflowDefinitionParser {
                 TaskGroup::class => $this->parseTaskGroup($task),
                 Task::class => $this->parseTask($task),
                 ResolvableTask::class => $this->parseResolvableTask($task),
+                default => [],
             })
             ->flatten(1)
             ->values();
@@ -70,11 +72,11 @@ class WorkflowDefinitionParser {
      */
     protected function parseTaskGroup(TaskGroup $definition): Collection {
         $tasks = Collection::wrap($definition->tasks)
-            ->filter(fn($task) => $task instanceof Task) // @phpstan-ignore-line
+            ->filter(fn($task) => $task instanceof Task || $task instanceof ResolvableTask) // @phpstan-ignore-line
             ->values();
 
         // Merge dependencies
-        $tasks = $tasks->map(function(Task $task) use ($definition) {
+        $tasks = $tasks->map(function(Task|ResolvableTask $task) use ($definition) {
             /** @var array<int, string> $dependencies */
             $dependencies = Collection::wrap($task->dependsOn)
                 ->merge(Collection::wrap($definition->dependsOn))
@@ -86,7 +88,10 @@ class WorkflowDefinitionParser {
             return $task;
         });
 
-        return $tasks->map(fn(Task $task) => $this->parseTask($task));
+        return $tasks->map(fn(Task|ResolvableTask $task) => $task instanceof Task
+            ? $this->parseTask($task)
+            : $this->parseResolvableTask($task)
+        );
     }
 
 
@@ -133,9 +138,9 @@ class WorkflowDefinitionParser {
 
         $job = new ResolvableTaskResolverJob(
             name: $definition->name,
-            dependsOn: collect(...$dependsOn)->push($definition->name)->toArray(),
-            itemProvider: new SerializableClosure($definition->items),
-            jobProvider: new SerializableClosure($definition->jobs),
+            dependsOn: collect(...$dependsOn)->push($definition->name)->toArray(), // @phpstan-ignore-line
+            itemProvider: new SerializableClosure($definition->items), // @phpstan-ignore-line
+            jobProvider: new SerializableClosure($definition->jobs), // @phpstan-ignore-line
         );
 
         // It's nearly impossible without resorting to parsing php in php to detect missing traits or empty jobs beforehand

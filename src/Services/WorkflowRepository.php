@@ -31,6 +31,19 @@ class WorkflowRepository {
 
 
     /**
+     * @param Workflow $workflow
+     * @param Collection<int, TaskDto> $taskDtos
+     * @return void
+     * @throws Throwable
+     */
+    public function appendTasks(Workflow $workflow, Collection $taskDtos): void {
+        DB::transaction(function() use ($workflow, $taskDtos) {
+            $this->storeTasks($workflow, $taskDtos);
+        });
+    }
+
+
+    /**
      * @param WorkflowDto $dto
      * @return Workflow
      */

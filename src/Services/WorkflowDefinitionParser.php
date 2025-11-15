@@ -2,6 +2,7 @@
 
 namespace AdamczykPiotr\DagWorkflows\Services;
 
+use AdamczykPiotr\DagWorkflows\Definitions\ResolvableTask;
 use AdamczykPiotr\DagWorkflows\Definitions\Task;
 use AdamczykPiotr\DagWorkflows\Definitions\TaskGroup;
 use AdamczykPiotr\DagWorkflows\Definitions\Workflow;
@@ -13,8 +14,12 @@ use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskDuplicateNameException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskMissingTrackingTraitException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskUnresolvedDependencyException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskWithoutJobException;
+use AdamczykPiotr\DagWorkflows\Jobs\ResolvableTaskResolverJob;
 use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
+use Closure;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+use Laravel\SerializableClosure\SerializableClosure;
 
 class WorkflowDefinitionParser {
 
@@ -30,11 +35,13 @@ class WorkflowDefinitionParser {
     public function parse(Workflow $definition): WorkflowDto {
         /** @var Collection<int, TaskDto> $tasks */
         $tasks = collect($definition->tasks)
-            ->filter(fn($task) => $task instanceof Task || $task instanceof TaskGroup) // @phpstan-ignore-line
-            ->map(fn(Task|TaskGroup $task) => ($task instanceof Task)
-                ? collect([$this->parseTask($task)])
-                : $this->parseTaskGroup($task)
-            )
+            ->filter(fn(mixed $task) => $task instanceof Task || $task instanceof ResolvableTask || $task instanceof TaskGroup) // @phpstan-ignore-line
+            ->map(fn(Task|ResolvableTask|TaskGroup $task) => match ($task::class) {
+                TaskGroup::class => $this->parseTaskGroup($task),
+                Task::class => $this->parseTask($task),
+                ResolvableTask::class => $this->parseResolvableTask($task),
+                default => [],
+            })
             ->flatten(1)
             ->values();
 
@@ -49,6 +56,15 @@ class WorkflowDefinitionParser {
 
 
     /**
+     * @param Collection<int, Task> $tasks
+     * @return Collection<int, TaskDto>
+     */
+    public function parseTasksFromResolvable(Collection $tasks): Collection {
+        return $tasks->map(fn(Task $task) => $this->parseTask($task));
+    }
+
+
+    /**
      * @param TaskGroup $definition
      * @return Collection<int, TaskDto>
      * @throws WorkflowTaskMissingTrackingTraitException
@@ -56,11 +72,11 @@ class WorkflowDefinitionParser {
      */
     protected function parseTaskGroup(TaskGroup $definition): Collection {
         $tasks = Collection::wrap($definition->tasks)
-            ->filter(fn($task) => $task instanceof Task) // @phpstan-ignore-line
+            ->filter(fn($task) => $task instanceof Task || $task instanceof ResolvableTask) // @phpstan-ignore-line
             ->values();
 
         // Merge dependencies
-        $tasks = $tasks->map(function(Task $task) use ($definition) {
+        $tasks = $tasks->map(function(Task|ResolvableTask $task) use ($definition) {
             /** @var array<int, string> $dependencies */
             $dependencies = Collection::wrap($task->dependsOn)
                 ->merge(Collection::wrap($definition->dependsOn))
@@ -72,7 +88,10 @@ class WorkflowDefinitionParser {
             return $task;
         });
 
-        return $tasks->map(fn(Task $task) => $this->parseTask($task));
+        return $tasks->map(fn(Task|ResolvableTask $task) => $task instanceof Task
+            ? $this->parseTask($task)
+            : $this->parseResolvableTask($task)
+        );
     }
 
 
@@ -106,6 +125,36 @@ class WorkflowDefinitionParser {
             name: $definition->name,
             steps: $jobs->map(fn(object $job, int $index) => new TaskStepDto($index + 1, $job)),
             dependsOn: Collection::wrap($definition->dependsOn)->values()
+        );
+    }
+
+
+    /**
+     * @param ResolvableTask $definition
+     * @return TaskDto
+     */
+    private function parseResolvableTask(ResolvableTask $definition): TaskDto {
+        $dependsOn = Collection::wrap($definition->dependsOn)->values();
+
+        $job = new ResolvableTaskResolverJob(
+            name: $definition->name,
+            dependsOn: collect(...$dependsOn)->push($definition->name)->toArray(), // @phpstan-ignore-line
+            itemProvider: new SerializableClosure($definition->items), // @phpstan-ignore-line
+            jobProvider: new SerializableClosure($definition->jobs), // @phpstan-ignore-line
+        );
+
+        // It's nearly impossible without resorting to parsing php in php to detect missing traits or empty jobs beforehand
+        // Runs from above will be executed in runtime when the ResolvableTaskResolverJob is handled
+
+        return new TaskDto(
+            name: $definition->name,
+            steps: collect([
+                new TaskStepDto(
+                    order: 1,
+                    job: $job
+                ),
+            ]),
+            dependsOn: $dependsOn
         );
     }
 
@@ -171,6 +220,11 @@ class WorkflowDefinitionParser {
 
         foreach ($tasks as $taskName => $task) {
             foreach ($task->dependsOn as $dependency) {
+                // Skip dynamic dependencies
+                if (Str::endsWith($dependency, ':')) {
+                    continue;
+                }
+
                 if ($namedTasks->has($dependency) === false) {
                     throw new WorkflowTaskUnresolvedDependencyException(
                         "Task {$taskName} has an unresolved dependency on task {$dependency}."

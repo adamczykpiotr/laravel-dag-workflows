@@ -17,7 +17,7 @@ class Workflow {
 
     /**
      * @param string $name
-     * @param array<int, Task|TaskGroup> $tasks
+     * @param array<int, Task|ResolvableTask|TaskGroup> $tasks
      */
     public function __construct(
         public string $name,

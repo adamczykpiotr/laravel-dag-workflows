@@ -91,6 +91,7 @@ class WorkflowRepository {
                 return [
                     WorkflowTaskStep::ATTRIBUTE_TASK_ID => $taskId,
                     WorkflowTaskStep::ATTRIBUTE_WORKFLOW_ID => $workflowId,
+                    WorkflowTaskStep::ATTRIBUTE_CLASS => $stepDto->job::class,
                     WorkflowTaskStep::ATTRIBUTE_ORDER => $stepDto->order,
                     WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PENDING,
                     WorkflowTaskStep::ATTRIBUTE_STARTED_AT => null,

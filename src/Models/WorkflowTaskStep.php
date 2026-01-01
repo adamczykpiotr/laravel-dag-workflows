@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $task_id
  * @property int $workflow_id
+ * @property string $class
  * @property int $order
  * @property RunStatus $status
  * @property Carbon|null $started_at
@@ -34,6 +35,7 @@ class WorkflowTaskStep extends BaseModel {
     const string ATTRIBUTE_ID = 'id';
     const string ATTRIBUTE_TASK_ID = 'task_id';
     const string ATTRIBUTE_WORKFLOW_ID = 'workflow_id';
+    const string ATTRIBUTE_CLASS = 'class';
     const string ATTRIBUTE_ORDER = 'order';
     const string ATTRIBUTE_STATUS = 'status';
     const string ATTRIBUTE_STARTED_AT = 'started_at';

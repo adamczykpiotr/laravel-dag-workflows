@@ -74,11 +74,11 @@ class WorkflowDispatcher {
     /**
      * @param WorkflowTaskStep $step
      * @param bool $force
-     * @return true
+     * @return bool
      */
     public function dispatchStep(WorkflowTaskStep $step, bool $force = false): bool {
         // Prevent overlaps
-        if ($step->status !== RunStatus::PENDING && $force === false) {
+        if ($force === false && $step->status !== RunStatus::PENDING) {
             return false;
         }
 

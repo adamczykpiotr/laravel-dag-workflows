@@ -23,15 +23,20 @@ class DagWorkflowTrackerJobMiddleware {
 
 
     /**
-     * @param object{workflowTaskStep: WorkflowTaskStep} $job
+     * @param object $job
      * @param Closure $next
      * @return mixed
      * @throws Throwable
      */
     public function handle(object $job, Closure $next): mixed {
+        // Skip middleware execution for jobs without injected $workflowTaskStep
+        if (property_exists($job, 'workflowTaskStep') === false || $job->workflowTaskStep instanceof WorkflowTaskStep === false) {
+            return $next($job);
+        }
+
         $step = $job->workflowTaskStep;
 
-        // Already processed or cancelled due to other failures
+        // Already processed or canceled due to other failures
         if ($step->status !== RunStatus::PENDING) {
             $job->fail(); // @phpstan-ignore-line
             return $next($job);

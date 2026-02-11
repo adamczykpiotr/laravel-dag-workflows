@@ -12,9 +12,10 @@ class WorkflowDispatcher {
 
     /**
      * @param Workflow $workflow
-     * @return void
+     * @param bool $force
+     * @return bool
      */
-    public function dispatchWorkflow(Workflow $workflow): void {
+    public function dispatchWorkflow(Workflow $workflow, bool $force = false): bool {
         $entrypoint = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
             ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
@@ -23,37 +24,39 @@ class WorkflowDispatcher {
             ->get();
 
         // Prevent overlaps
-        if ($workflow->status !== RunStatus::PENDING) {
-            return;
+        if ($workflow->status !== RunStatus::PENDING && $force === false) {
+            return false;
         }
 
-        $entrypoint->each(fn(WorkflowTask $task) => $this->dispatchTask($task));
+        $entrypoint->each(fn(WorkflowTask $task) => $this->dispatchTask($task, $force));
+        return true;
     }
 
 
     /**
      * @param WorkflowTask $task
-     * @return void
+     * @param bool $force
+     * @return bool
      */
-    public function dispatchTask(WorkflowTask $task): void {
+    public function dispatchTask(WorkflowTask $task, bool $force = false): bool {
         // Prevent overlaps
-        if ($task->status !== RunStatus::PENDING) {
-            return;
+        if ($task->status !== RunStatus::PENDING && $force === false) {
+            return false;
         }
 
         if ($task->initialStep === null) {
-            return;
+            return false;
         }
 
-        $this->dispatchStep($task->initialStep);
+        return $this->dispatchStep($task->initialStep, $force);
     }
 
 
     /**
      * @param WorkflowTask $task
-     * @return void
+     * @return bool
      */
-    public function dispatchDependantTasks(WorkflowTask $task): void {
+    public function dispatchDependantTasks(WorkflowTask $task): bool {
         $dependantTasks = $task->dependants()
             ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
             ->whereDoesntHave(
@@ -64,17 +67,19 @@ class WorkflowDispatcher {
             ->get();
 
         $dependantTasks->each(fn(WorkflowTask $dependantTask) => $this->dispatchTask($dependantTask));
+        return true;
     }
 
 
     /**
      * @param WorkflowTaskStep $step
-     * @return void
+     * @param bool $force
+     * @return bool
      */
-    public function dispatchStep(WorkflowTaskStep $step): void {
+    public function dispatchStep(WorkflowTaskStep $step, bool $force = false): bool {
         // Prevent overlaps
-        if ($step->status !== RunStatus::PENDING) {
-            return;
+        if ($force === false && $step->status !== RunStatus::PENDING) {
+            return false;
         }
 
         // Status will be updated when job will be picked up by queue worker
@@ -86,5 +91,6 @@ class WorkflowDispatcher {
 
         $job->workflowTaskStep = $step; // @phpstan-ignore-line
         dispatch($job);
+        return true;
     }
 }

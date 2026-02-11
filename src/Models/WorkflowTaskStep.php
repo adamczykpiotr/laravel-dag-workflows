@@ -3,6 +3,7 @@
 namespace AdamczykPiotr\DagWorkflows\Models;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
+use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use Eloquent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -83,5 +84,21 @@ class WorkflowTaskStep extends BaseModel {
     public function nextStep(): HasOne {
         return $this->hasOne(WorkflowTaskStep::class, self::ATTRIBUTE_TASK_ID, self::ATTRIBUTE_TASK_ID)
             ->where(self::ATTRIBUTE_ORDER, $this->order + 1);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * @param bool $force
+     * @return bool
+     */
+    public function dispatch(bool $force = false): bool {
+        /** @var WorkflowDispatcher $dispatcher */
+        $dispatcher = resolve(WorkflowDispatcher::class);
+        return $dispatcher->dispatchStep($this, $force);
     }
 }

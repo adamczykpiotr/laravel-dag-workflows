@@ -5,7 +5,6 @@ namespace AdamczykPiotr\DagWorkflows\Models;
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use Eloquent;
-use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -64,16 +63,20 @@ class Workflow extends BaseModel {
     }
 
 
-    // Helper
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
 
 
     /**
-     * @return void
-     * @throws BindingResolutionException
+     * @param bool $force
+     * @return bool
      */
-    public function dispatch(): void {
+    public function dispatch(bool $force = false): bool {
         /** @var WorkflowDispatcher $dispatcher */
-        $dispatcher = app()->make(WorkflowDispatcher::class);
-        $dispatcher->dispatchWorkflow($this);
+        $dispatcher = resolve(WorkflowDispatcher::class);
+        return $dispatcher->dispatchWorkflow($this, $force);
     }
 }

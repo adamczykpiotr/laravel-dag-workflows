@@ -23,7 +23,7 @@ class DagWorkflowTrackerJobMiddleware {
 
 
     /**
-     * @param object{workflowTaskStep: WorkflowTaskStep} $job
+     * @param object $job
      * @param Closure $next
      * @return mixed
      * @throws Throwable

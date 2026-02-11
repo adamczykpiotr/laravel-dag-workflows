@@ -3,6 +3,7 @@
 namespace AdamczykPiotr\DagWorkflows\Models;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
+use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use Eloquent;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -134,5 +135,22 @@ class WorkflowTask extends BaseModel {
     public function recursiveDependants(): BelongsToMany {
         return $this->dependants()
             ->with(self::RELATION_RECURSIVE_DEPENDANTS);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
+
+
+    /**
+     * @param bool $force
+     * @return bool
+     */
+    public function dispatch(bool $force = false): bool {
+        /** @var WorkflowDispatcher $dispatcher */
+        $dispatcher = resolve(WorkflowDispatcher::class);
+        return $dispatcher->dispatchTask($this, $force);
     }
 }

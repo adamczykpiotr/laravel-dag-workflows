@@ -4,7 +4,6 @@ namespace AdamczykPiotr\DagWorkflows\Traits;
 
 use AdamczykPiotr\DagWorkflows\Middlewares\DagWorkflowTrackerJobMiddleware;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
-use Illuminate\Contracts\Container\BindingResolutionException;
 
 trait HasWorkflowTracking {
 
@@ -37,11 +36,10 @@ trait HasWorkflowTracking {
 
     /**
      * @return array<int, object>
-     * @throws BindingResolutionException
      */
     public function middleware(): array {
         return [
-            app()->make(DagWorkflowTrackerJobMiddleware::class),
+            resolve(DagWorkflowTrackerJobMiddleware::class),
         ];
     }
 }

@@ -10,7 +10,6 @@ use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskWithoutJobException;
 use AdamczykPiotr\DagWorkflows\Models\Workflow as WorkflowModel;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDefinitionParser;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowRepository;
-use Illuminate\Contracts\Container\BindingResolutionException;
 use Throwable;
 
 class Workflow {
@@ -28,7 +27,6 @@ class Workflow {
 
     /**
      * @return WorkflowModel
-     * @throws BindingResolutionException
      * @throws WorkflowTaskCircularDependencyException
      * @throws WorkflowTaskMissingTrackingTraitException
      * @throws WorkflowTaskUnresolvedDependencyException
@@ -38,10 +36,10 @@ class Workflow {
      */
     public function dispatch(): WorkflowModel {
         /** @var WorkflowDefinitionParser $parser */
-        $parser = app()->make(WorkflowDefinitionParser::class);
+        $parser = resolve(WorkflowDefinitionParser::class);
         $workflow = $parser->parse($this);
 
-        $repository = app()->make(WorkflowRepository::class);
+        $repository = resolve(WorkflowRepository::class);
         $model = $repository->store($workflow);
 
         $model->dispatch();

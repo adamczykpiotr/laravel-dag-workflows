@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Throwable;
 
 
 /**
@@ -100,5 +101,16 @@ class WorkflowTaskStep extends BaseModel {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         return $dispatcher->dispatchStep($this, $force);
+    }
+
+
+    /**
+     * @return void
+     * @throws Throwable
+     */
+    public function retry(): void {
+        /** @var WorkflowDispatcher $dispatcher */
+        $dispatcher = resolve(WorkflowDispatcher::class);
+        $dispatcher->retryStep($this);
     }
 }

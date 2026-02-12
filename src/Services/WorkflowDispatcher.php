@@ -6,9 +6,9 @@ use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Database\Eloquent\Builder as BuilderContract;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class WorkflowDispatcher {
 
@@ -63,7 +63,7 @@ class WorkflowDispatcher {
             ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
             ->whereDoesntHave(
                 WorkflowTask::RELATION_DEPENDENCIES,
-                fn(BuilderContract $builder) => $builder->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED) // @phpstan-ignore-line
+                fn(BuilderContract $builder) => $builder->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
             )
             ->with(WorkflowTask::RELATION_INITIAL_STEP)
             ->get();
@@ -100,9 +100,10 @@ class WorkflowDispatcher {
     /**
      * @param WorkflowTaskStep $step
      * @return bool
+     * @throws Throwable
      */
     public function retryStep(WorkflowTaskStep $step): bool {
-        DB::transaction(function () use ($step) {
+        DB::transaction(function() use ($step) {
             $step->status = RunStatus::PENDING;
             $step->failed_at = null;
             $step->completed_at = null;
@@ -164,6 +165,7 @@ class WorkflowDispatcher {
     /**
      * @param WorkflowTaskStep $step
      * @return void
+     * @throws Throwable
      */
     public function failStep(WorkflowTaskStep $step): void {
         DB::transaction(function() use ($step) {
@@ -195,11 +197,11 @@ class WorkflowDispatcher {
 
             if ($cancelledTaskIds->isNotEmpty()) {
                 WorkflowTask::query()
-                ->whereIn(WorkflowTask::ATTRIBUTE_ID, $cancelledTaskIds)
-                ->update([
-                    WorkflowTask::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
-                    WorkflowTask::ATTRIBUTE_FAILED_AT => now(),
-                ]);
+                    ->whereIn(WorkflowTask::ATTRIBUTE_ID, $cancelledTaskIds)
+                    ->update([
+                        WorkflowTask::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
+                        WorkflowTask::ATTRIBUTE_FAILED_AT => now(),
+                    ]);
 
                 WorkflowTaskStep::query()
                     ->whereIn(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $cancelledTaskIds)

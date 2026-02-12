@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection as SupportCollection;
 
 
 /**
@@ -139,9 +140,9 @@ class WorkflowTask extends BaseModel {
 
 
     /**
-     * @return Collection<int, int>
+     * @return SupportCollection<int, int>
      */
-    public function getRecursiveDependantIds(): \Illuminate\Support\Collection {
+    public function getRecursiveDependantIds(): SupportCollection {
         $ids = collect();
 
         foreach ($this->recursiveDependants as $dependant) {

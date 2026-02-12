@@ -6,7 +6,7 @@ use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
-use Illuminate\Contracts\Database\Eloquent\Builder as BuilderContract;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -63,7 +63,7 @@ class WorkflowDispatcher {
             ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
             ->whereDoesntHave(
                 WorkflowTask::RELATION_DEPENDENCIES,
-                fn(BuilderContract $builder) => $builder->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
+                fn(Builder $builder) => $builder->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED) // @phpstan-ignore-line
             )
             ->with(WorkflowTask::RELATION_INITIAL_STEP)
             ->get();

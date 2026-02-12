@@ -49,7 +49,7 @@ class DagWorkflowTrackerJobMiddleware {
             $this->completeWorkflowTaskStep($step);
             return $result;
         } catch (Throwable $t) {
-            $this->failWorkflowTaskStep($step);
+            $this->dispatcher->failStep($step);
 
             // Re-throw the exception so Laravel's queue system can handle it properly
             throw $t;
@@ -137,71 +137,5 @@ class DagWorkflowTrackerJobMiddleware {
                 $workflow->save();
             }
         });
-    }
-
-
-    /**
-     * @param WorkflowTaskStep $step
-     * @return void
-     * @throws Throwable
-     */
-    protected function failWorkflowTaskStep(WorkflowTaskStep $step): void {
-        DB::transaction(function() use ($step) {
-            $step->status = RunStatus::FAILED;
-            $step->failed_at = now();
-            $step->save();
-
-            $task = $step->task;
-            $task->status = RunStatus::FAILED;
-            $task->failed_at = now();
-            $task->save();
-
-            $workflow = $task->workflow;
-            $workflow->status = RunStatus::FAILED;
-            $workflow->failed_at = now();
-            $workflow->save();
-
-            // Cancel rest of the steps from this task
-            $task->steps()
-                ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
-                ->update([
-                    WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
-                    WorkflowTaskStep::ATTRIBUTE_FAILED_AT => now(),
-                ]);
-
-            // Cancel dependant tasks (all levels deep) & their steps
-            $task->load(WorkflowTask::RELATION_RECURSIVE_DEPENDANTS);
-            $cancelledTaskIds = $this->retrieveRecursiveDependants($task);
-
-            WorkflowTask::query()
-                ->whereIn(WorkflowTask::ATTRIBUTE_ID, $cancelledTaskIds)
-                ->update([
-                    WorkflowTask::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
-                    WorkflowTask::ATTRIBUTE_FAILED_AT => now(),
-                ]);
-
-            WorkflowTaskStep::query()
-                ->whereIn(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $cancelledTaskIds)
-                ->update([
-                    WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
-                    WorkflowTaskStep::ATTRIBUTE_FAILED_AT => now(),
-                ]);
-        });
-    }
-
-
-    /**
-     * @param WorkflowTask $task
-     * @param int $level
-     * @return Collection<int, int>
-     */
-    protected function retrieveRecursiveDependants(WorkflowTask $task, int $level = 0): Collection {
-        $ids = collect($level === 0 ? [] : [$task->id]);
-
-        foreach ($task->recursiveDependants as $dependency) {
-            $ids->push(...$this->retrieveRecursiveDependants($dependency, $level + 1));
-        }
-
-        return $ids;
     }
 }

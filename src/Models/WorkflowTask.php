@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection as SupportCollection;
 
 
 /**
@@ -135,6 +136,21 @@ class WorkflowTask extends BaseModel {
     public function recursiveDependants(): BelongsToMany {
         return $this->dependants()
             ->with(self::RELATION_RECURSIVE_DEPENDANTS);
+    }
+
+
+    /**
+     * @return SupportCollection<int, int>
+     */
+    public function getRecursiveDependantIds(): SupportCollection {
+        $ids = collect();
+
+        foreach ($this->recursiveDependants as $dependant) {
+            $ids->push($dependant->id);
+            $ids->push(...$dependant->getRecursiveDependantIds());
+        }
+
+        return $ids;
     }
 
     /*

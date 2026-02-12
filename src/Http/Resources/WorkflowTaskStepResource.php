@@ -19,6 +19,7 @@ class WorkflowTaskStepResource extends JsonResource {
         return [
             'id' => $this->id,
             'order' => $this->order,
+            'class' => $this->class,
 
             'status' => $this->status,
 

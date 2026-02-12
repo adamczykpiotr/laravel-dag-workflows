@@ -34,8 +34,9 @@ return new class extends Migration {
         Schema::create('workflow_task_steps', function(Blueprint $table) {
             $table->id();
             $table->foreignId('task_id')->index()->constrained('workflow_tasks');
-            $table->foreignId('workflow_id')->index()->constrained('workflows');
+            $table->foreignId('workflow_id')->index();
             $table->unsignedInteger('order')->index();
+            $table->string('class', 1024);
             $table->string('status')->index();
             $table->timestamp('started_at')->nullable();
             $table->timestamp('failed_at')->nullable();

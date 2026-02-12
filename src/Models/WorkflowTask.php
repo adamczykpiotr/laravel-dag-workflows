@@ -137,6 +137,21 @@ class WorkflowTask extends BaseModel {
             ->with(self::RELATION_RECURSIVE_DEPENDANTS);
     }
 
+
+    /**
+     * @return Collection<int, int>
+     */
+    public function getRecursiveDependantIds(): \Illuminate\Support\Collection {
+        $ids = collect();
+
+        foreach ($this->recursiveDependants as $dependant) {
+            $ids->push($dependant->id);
+            $ids->push(...$dependant->getRecursiveDependantIds());
+        }
+
+        return $ids;
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Helpers

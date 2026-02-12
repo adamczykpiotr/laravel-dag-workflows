@@ -3,6 +3,7 @@
 namespace AdamczykPiotr\DagWorkflows\Tests;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Model;
 use Orchestra\Testbench\TestCase as Orchestra;
 use AdamczykPiotr\DagWorkflows\DagWorkflowsServiceProvider;
 
@@ -11,6 +12,8 @@ class TestCase extends Orchestra
     protected function setUp(): void
     {
         parent::setUp();
+
+        Model::unguard();
 
         Factory::guessFactoryNamesUsing(
             fn (string $modelName) => 'AdamczykPiotr\\DagWorkflows\\Database\\Factories\\'.class_basename($modelName).'Factory'
@@ -28,10 +31,7 @@ class TestCase extends Orchestra
     {
         config()->set('database.default', 'testing');
 
-        /*
-         foreach (\Illuminate\Support\Facades\File::allFiles(__DIR__ . '/../database/migrations') as $migration) {
-            (include $migration->getRealPath())->up();
-         }
-         */
+        $migration = include __DIR__ . '/../database/migrations/create_dag_workflows_table.php';
+        $migration->up();
     }
 }

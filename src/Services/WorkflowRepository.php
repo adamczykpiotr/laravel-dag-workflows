@@ -15,6 +15,9 @@ use Throwable;
 
 class WorkflowRepository {
 
+    const int INSERT_CHUNK_SIZE = 5_000;
+
+
     /**
      * @param WorkflowDto $dto
      * @return Workflow
@@ -78,7 +81,10 @@ class WorkflowRepository {
                 WorkflowTask::ATTRIBUTE_UPDATED_AT => now(),
             ];
         });
-        WorkflowTask::insert($tasks->toArray());
+
+        foreach ($tasks->chunk(self::INSERT_CHUNK_SIZE) as $chunk) {
+            WorkflowTask::insert($chunk->toArray());
+        }
 
         $mapping = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
@@ -87,6 +93,7 @@ class WorkflowRepository {
         $steps = $taskDtos->map(function(TaskDto $taskDto) use ($mapping, $workflow) {
             $taskId = $mapping->get($taskDto->name);
             $workflowId = $workflow->id;
+
             return collect($taskDto->steps)->map(function(TaskStepDto $stepDto) use ($taskId, $workflowId) {
                 return [
                     WorkflowTaskStep::ATTRIBUTE_TASK_ID => $taskId,
@@ -103,19 +110,27 @@ class WorkflowRepository {
                 ];
             });
         })->flatten(1);
-        WorkflowTaskStep::insert($steps->toArray());
+
+        foreach ($steps->chunk(self::INSERT_CHUNK_SIZE) as $chunk) {
+            WorkflowTaskStep::insert($chunk->toArray());
+        }
 
         $dependencies = $taskDtos->map(function(TaskDto $taskDto) use ($mapping) {
             $taskId = $mapping->get($taskDto->name);
+
             return collect($taskDto->dependsOn)
                 ->map(function(string $dependencyName) use ($mapping, $taskId) {
                     $dependencyId = $mapping->get($dependencyName);
+
                     return [
                         WorkflowTask::PIVOT_COLUMN_TASK_ID => $taskId,
                         WorkflowTask::PIVOT_COLUMN_DEPENDANT_TASK_ID => $dependencyId,
                     ];
                 });
         })->flatten(1);
-        DB::table(WorkflowTask::PIVOT_DEPENDENCIES_TABLE)->insert($dependencies->toArray());
+
+        foreach ($dependencies->chunk(self::INSERT_CHUNK_SIZE) as $chunk) {
+            DB::table(WorkflowTask::PIVOT_DEPENDENCIES_TABLE)->insert($chunk->toArray());
+        }
     }
 }

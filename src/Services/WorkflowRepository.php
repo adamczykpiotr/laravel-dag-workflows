@@ -13,15 +13,21 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
-class WorkflowRepository {
+class WorkflowRepository
+{
+    /**
+     * Maximum number of rows per INSERT statement.
+     * PostgreSQL supports at most 65535 bind parameters per prepared statement.
+     * With up to 11 columns per row, 5000 rows = 55000 params — safely under the limit.
+     */
+    protected const int INSERT_CHUNK_SIZE = 5000;
 
     /**
-     * @param WorkflowDto $dto
-     * @return Workflow
      * @throws Throwable
      */
-    public function store(WorkflowDto $dto): Workflow {
-        return DB::transaction(function() use ($dto) {
+    public function store(WorkflowDto $dto): Workflow
+    {
+        return DB::transaction(function () use ($dto) {
             $workflow = $this->storeWorkflow($dto);
             $this->storeTasks($workflow, $dto->tasks);
 
@@ -29,26 +35,21 @@ class WorkflowRepository {
         });
     }
 
-
     /**
-     * @param Workflow $workflow
-     * @param Collection<int, TaskDto> $taskDtos
-     * @return void
+     * @param  Collection<int, TaskDto>  $taskDtos
+     *
      * @throws Throwable
      */
-    public function appendTasks(Workflow $workflow, Collection $taskDtos): void {
-        DB::transaction(function() use ($workflow, $taskDtos) {
+    public function appendTasks(Workflow $workflow, Collection $taskDtos): void
+    {
+        DB::transaction(function () use ($workflow, $taskDtos) {
             $this->storeTasks($workflow, $taskDtos);
         });
     }
 
-
-    /**
-     * @param WorkflowDto $dto
-     * @return Workflow
-     */
-    protected function storeWorkflow(WorkflowDto $dto): Workflow {
-        $workflow = new Workflow();
+    protected function storeWorkflow(WorkflowDto $dto): Workflow
+    {
+        $workflow = new Workflow;
         $workflow->name = $dto->name;
         $workflow->status = RunStatus::PENDING;
         $workflow->started_at = null;
@@ -59,14 +60,12 @@ class WorkflowRepository {
         return $workflow;
     }
 
-
     /**
-     * @param Workflow $workflow
-     * @param Collection<int, TaskDto> $taskDtos
-     * @return void
+     * @param  Collection<int, TaskDto>  $taskDtos
      */
-    protected function storeTasks(Workflow $workflow, Collection $taskDtos): void {
-        $tasks = $taskDtos->map(function(TaskDto $taskDto) use ($workflow) {
+    protected function storeTasks(Workflow $workflow, Collection $taskDtos): void
+    {
+        $tasks = $taskDtos->map(function (TaskDto $taskDto) use ($workflow) {
             return [
                 WorkflowTask::ATTRIBUTE_WORKFLOW_ID => $workflow->id,
                 WorkflowTask::ATTRIBUTE_NAME => $taskDto->name,
@@ -78,16 +77,19 @@ class WorkflowRepository {
                 WorkflowTask::ATTRIBUTE_UPDATED_AT => now(),
             ];
         });
-        WorkflowTask::insert($tasks->toArray());
+        foreach ($tasks->chunk(self::INSERT_CHUNK_SIZE) as $chunk) {
+            WorkflowTask::insert($chunk->toArray());
+        }
 
         $mapping = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
             ->pluck(WorkflowTask::ATTRIBUTE_ID, WorkflowTask::ATTRIBUTE_NAME);
 
-        $steps = $taskDtos->map(function(TaskDto $taskDto) use ($mapping, $workflow) {
+        $steps = $taskDtos->map(function (TaskDto $taskDto) use ($mapping, $workflow) {
             $taskId = $mapping->get($taskDto->name);
             $workflowId = $workflow->id;
-            return collect($taskDto->steps)->map(function(TaskStepDto $stepDto) use ($taskId, $workflowId) {
+
+            return collect($taskDto->steps)->map(function (TaskStepDto $stepDto) use ($taskId, $workflowId) {
                 return [
                     WorkflowTaskStep::ATTRIBUTE_TASK_ID => $taskId,
                     WorkflowTaskStep::ATTRIBUTE_WORKFLOW_ID => $workflowId,
@@ -103,19 +105,25 @@ class WorkflowRepository {
                 ];
             });
         })->flatten(1);
-        WorkflowTaskStep::insert($steps->toArray());
+        foreach ($steps->chunk(self::INSERT_CHUNK_SIZE) as $chunk) {
+            WorkflowTaskStep::insert($chunk->toArray());
+        }
 
-        $dependencies = $taskDtos->map(function(TaskDto $taskDto) use ($mapping) {
+        $dependencies = $taskDtos->map(function (TaskDto $taskDto) use ($mapping) {
             $taskId = $mapping->get($taskDto->name);
+
             return collect($taskDto->dependsOn)
-                ->map(function(string $dependencyName) use ($mapping, $taskId) {
+                ->map(function (string $dependencyName) use ($mapping, $taskId) {
                     $dependencyId = $mapping->get($dependencyName);
+
                     return [
                         WorkflowTask::PIVOT_COLUMN_TASK_ID => $taskId,
                         WorkflowTask::PIVOT_COLUMN_DEPENDANT_TASK_ID => $dependencyId,
                     ];
                 });
         })->flatten(1);
-        DB::table(WorkflowTask::PIVOT_DEPENDENCIES_TABLE)->insert($dependencies->toArray());
+        foreach ($dependencies->chunk(self::INSERT_CHUNK_SIZE) as $chunk) {
+            DB::table(WorkflowTask::PIVOT_DEPENDENCIES_TABLE)->insert($chunk->toArray());
+        }
     }
 }

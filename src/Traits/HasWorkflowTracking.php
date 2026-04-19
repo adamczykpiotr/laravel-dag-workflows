@@ -28,9 +28,10 @@ trait HasWorkflowTracking {
 
     public function progress(int $percentage, bool $force = false): void {
         $clamped = max(0, min(100, $percentage));
+        $isFirstReport = $this->workflowTaskStep->progress === null;
         $this->workflowTaskStep->progress = $clamped;
 
-        if ($clamped === 100 || $force) {
+        if ($isFirstReport || $clamped === 100 || $force) {
             $this->workflowTaskStep->save();
             return;
         }

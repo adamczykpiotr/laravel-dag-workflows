@@ -23,7 +23,7 @@ use Throwable;
  * @property Carbon|null $failed_at
  * @property Carbon|null $completed_at
  * @property string $payload
- * @property int $progress
+ * @property int|null $progress
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read WorkflowTaskStep|null $nextStep

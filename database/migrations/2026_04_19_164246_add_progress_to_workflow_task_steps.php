@@ -8,7 +8,7 @@ return new class extends Migration {
 
     public function up(): void {
         Schema::table('workflow_task_steps', function(Blueprint $table) {
-            $table->unsignedTinyInteger('progress')->default(0)->after('payload');
+            $table->unsignedTinyInteger('progress')->nullable()->after('payload');
         });
     }
 

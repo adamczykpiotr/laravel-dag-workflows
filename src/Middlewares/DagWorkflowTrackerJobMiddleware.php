@@ -105,6 +105,7 @@ class DagWorkflowTrackerJobMiddleware {
             $step->status = RunStatus::COMPLETED;
             $step->completed_at = now();
             $step->failed_at = null;
+            $step->progress = 100;
             $step->save();
 
             $nextStep = $step->nextStep;

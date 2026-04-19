@@ -14,6 +14,7 @@ Key features:
 - Support for single and grouped tasks
 - Task dependencies and ordering
 - Easy dispatching and inspection via Eloquent models
+- Per-step progress reporting with built-in debounce
 
 ## Installation
 
@@ -21,9 +22,11 @@ Install the package via Composer and run migrations:
 
 ```bash
 composer require adamczykpiotr/laravel-dag-workflows
-php artisan vendor:publish --tag="dag-workflows-migrations"
 php artisan migrate
 ```
+
+Migrations ship with the package and run in place. If you want to customise the
+schema, publish them first: `php artisan vendor:publish --tag="dag-workflows-migrations"`.
 
 ## Usage
 
@@ -105,6 +108,11 @@ $workflow = new Workflow(
 $model = $workflow->dispatch();
 dump($model->id);
 ```
+
+## Reporting progress
+
+Jobs using `HasWorkflowTracking` can call `$this->progress(int $percentage)` (0–100).
+Writes are debounced against the step row's `updated_at` (30s window); `100` and `progress(..., force: true)` always write.
 
 ## Testing
 Run the package and application tests:

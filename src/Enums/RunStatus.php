@@ -11,4 +11,12 @@ enum RunStatus: string
     case COMPLETED = 'COMPLETED';
     case FAILED = 'FAILED';
     case CANCELLED = 'CANCELLED';
+
+
+    public function isTerminal(): bool {
+        return match ($this) {
+            self::COMPLETED, self::FAILED, self::CANCELLED => true,
+            self::PENDING, self::RUNNING => false,
+        };
+    }
 }

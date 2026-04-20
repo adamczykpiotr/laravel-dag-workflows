@@ -61,7 +61,7 @@ function makeCompletedStep(WorkflowTask $task, string $class, int $durationSecon
     return $step;
 }
 
-function makeStep(WorkflowTask $task, RunStatus $status, string $class, int $order = 1, ?Carbon $createdAt = null): WorkflowTaskStep {
+function addStep(WorkflowTask $task, RunStatus $status, string $class, int $order = 1, ?Carbon $createdAt = null): WorkflowTaskStep {
     $step = new WorkflowTaskStep();
     $step->task_id = $task->id;
     $step->workflow_id = $task->workflow_id;
@@ -95,7 +95,7 @@ afterEach(function() {
 it('reports zero estimatedDurationSeconds for a step class with no completed history', function() {
     $wf = makeWorkflow();
     $t = makeTask($wf);
-    $step = makeStep($t, RunStatus::PENDING, 'NewJob');
+    $step = addStep($t, RunStatus::PENDING, 'NewJob');
 
     $dto = estimateFor($wf);
 
@@ -108,7 +108,7 @@ it('averages durations of completed steps of the same class', function() {
     makeCompletedStep($t, 'JobA', durationSeconds: 30);
     makeCompletedStep($t, 'JobA', durationSeconds: 50, order: 2);
     makeCompletedStep($t, 'JobA', durationSeconds: 70, order: 3);
-    $pending = makeStep($t, RunStatus::PENDING, 'JobA', order: 4);
+    $pending = addStep($t, RunStatus::PENDING, 'JobA', order: 4);
 
     $dto = estimateFor($wf);
 
@@ -118,7 +118,7 @@ it('averages durations of completed steps of the same class', function() {
 it('step estimated remaining falls back to 0 when no class history', function() {
     $wf = makeWorkflow();
     $t = makeTask($wf);
-    $pending = makeStep($t, RunStatus::PENDING, 'NewJob');
+    $pending = addStep($t, RunStatus::PENDING, 'NewJob');
 
     $dto = estimateFor($wf);
 
@@ -130,7 +130,7 @@ it('pending step remaining equals the class mean', function() {
     $t = makeTask($wf);
     makeCompletedStep($t, 'JobA', durationSeconds: 40);
     makeCompletedStep($t, 'JobA', durationSeconds: 60, order: 2);
-    $pending = makeStep($t, RunStatus::PENDING, 'JobA', order: 3);
+    $pending = addStep($t, RunStatus::PENDING, 'JobA', order: 3);
 
     $dto = estimateFor($wf);
 
@@ -141,7 +141,7 @@ it('running step remaining subtracts elapsed from the class mean', function() {
     $wf = makeWorkflow();
     $t = makeTask($wf);
     makeCompletedStep($t, 'JobA', durationSeconds: 100);
-    $running = makeStep($t, RunStatus::RUNNING, 'JobA', order: 2, createdAt: now()->subSeconds(30));
+    $running = addStep($t, RunStatus::RUNNING, 'JobA', order: 2, createdAt: now()->subSeconds(30));
 
     $dto = estimateFor($wf);
 
@@ -152,7 +152,7 @@ it('running step remaining clamps to 0 when elapsed exceeds the class mean', fun
     $wf = makeWorkflow();
     $t = makeTask($wf);
     makeCompletedStep($t, 'JobA', durationSeconds: 10);
-    $running = makeStep($t, RunStatus::RUNNING, 'JobA', order: 2, createdAt: now()->subSeconds(60));
+    $running = addStep($t, RunStatus::RUNNING, 'JobA', order: 2, createdAt: now()->subSeconds(60));
 
     $dto = estimateFor($wf);
 
@@ -163,9 +163,9 @@ it('terminal steps report 0 remaining', function() {
     $wf = makeWorkflow();
     $t = makeTask($wf);
     makeCompletedStep($t, 'JobA', durationSeconds: 100);
-    $done = makeStep($t, RunStatus::COMPLETED, 'JobA', order: 2);
-    $failed = makeStep($t, RunStatus::FAILED, 'JobA', order: 3);
-    $cancelled = makeStep($t, RunStatus::CANCELLED, 'JobA', order: 4);
+    $done = addStep($t, RunStatus::COMPLETED, 'JobA', order: 2);
+    $failed = addStep($t, RunStatus::FAILED, 'JobA', order: 3);
+    $cancelled = addStep($t, RunStatus::CANCELLED, 'JobA', order: 4);
 
     $dto = estimateFor($wf);
 
@@ -181,8 +181,8 @@ it('task remaining sums its non-terminal steps', function() {
     makeCompletedStep($history, 'JobB', durationSeconds: 60, order: 2);
 
     $active = makeTask($wf);
-    makeStep($active, RunStatus::RUNNING, 'JobA', order: 1, createdAt: now()->subSeconds(10));
-    makeStep($active, RunStatus::PENDING, 'JobB', order: 2);
+    addStep($active, RunStatus::RUNNING, 'JobA', order: 1, createdAt: now()->subSeconds(10));
+    addStep($active, RunStatus::PENDING, 'JobB', order: 2);
 
     $dto = estimateFor($wf);
 
@@ -197,9 +197,9 @@ it('workflow remaining is the max across unfinished tasks', function() {
     makeCompletedStep($history, 'Long', durationSeconds: 200, order: 2);
 
     $short = makeTask($wf);
-    makeStep($short, RunStatus::PENDING, 'Short');
+    addStep($short, RunStatus::PENDING, 'Short');
     $long = makeTask($wf);
-    makeStep($long, RunStatus::PENDING, 'Long');
+    addStep($long, RunStatus::PENDING, 'Long');
 
     expect(estimateFor($wf)->estimatedSecondsRemaining)->toBe(200);
 });
@@ -211,9 +211,9 @@ it('workflow remaining takes the longest parallel task, not the sum', function()
     makeCompletedStep($history, 'JobB', durationSeconds: 100, order: 2);
 
     $fast = makeTask($wf);
-    makeStep($fast, RunStatus::PENDING, 'JobA');
+    addStep($fast, RunStatus::PENDING, 'JobA');
     $slow = makeTask($wf);
-    makeStep($slow, RunStatus::PENDING, 'JobB');
+    addStep($slow, RunStatus::PENDING, 'JobB');
 
     expect(estimateFor($wf)->estimatedSecondsRemaining)->toBe(100);
 });
@@ -242,7 +242,7 @@ it('estimated completion is non-null when the workflow has remaining work with h
     $wf = makeWorkflow();
     $t = makeTask($wf);
     makeCompletedStep($t, 'JobA', durationSeconds: 120);
-    makeStep($t, RunStatus::PENDING, 'JobA', order: 2);
+    addStep($t, RunStatus::PENDING, 'JobA', order: 2);
 
     expect(estimateFor($wf)->estimatedCompletionAt)->not->toBeNull();
 });
@@ -252,7 +252,7 @@ it('serialises new timing fields on the WorkflowResource tree', function() {
     $history = makeTask($wf, RunStatus::COMPLETED);
     makeCompletedStep($history, 'JobA', durationSeconds: 60);
     $active = makeTask($wf, RunStatus::RUNNING, createdAt: now()->subMinutes(2));
-    $running = makeStep($active, RunStatus::RUNNING, 'JobA', createdAt: now()->subSeconds(20));
+    $running = addStep($active, RunStatus::RUNNING, 'JobA', createdAt: now()->subSeconds(20));
 
     $controller = new \AdamczykPiotr\DagWorkflows\Http\Controllers\WorkflowController();
     $response = $controller->show($wf->id);

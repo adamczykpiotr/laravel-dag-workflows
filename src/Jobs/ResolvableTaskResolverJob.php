@@ -3,6 +3,7 @@
 namespace AdamczykPiotr\DagWorkflows\Jobs;
 
 use AdamczykPiotr\DagWorkflows\Definitions\Task;
+use AdamczykPiotr\DagWorkflows\Middlewares\ResolvableItems\WorkflowResolvableItemsMiddleware;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDefinitionParser;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowRepository;
@@ -13,6 +14,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Laravel\SerializableClosure\SerializableClosure;
 use Throwable;
 
@@ -46,25 +48,41 @@ class ResolvableTaskResolverJob implements ShouldQueue {
         WorkflowDefinitionParser $definitionParser,
         WorkflowRepository $workflowRepository
     ): void {
-        /** @var callable():array<int|string,mixed> $provider */
-        $provider = $this->itemProvider->getClosure();
-        $items = $provider();
+        try {
+            /** @var callable():array<int|string,mixed> $provider */
+            $provider = $this->itemProvider->getClosure();
 
-        /** @var callable(mixed): (object|array<int, object>) $jobProvider */
-        $jobProvider = $this->jobProvider->getClosure();
+            $middlewareClass = config('dag-workflows.resolvable_items_middleware');
+            assert(is_string($middlewareClass));
+            $middleware = resolve($middlewareClass);
+            assert($middleware instanceof WorkflowResolvableItemsMiddleware);
 
-        /** @var Collection<int|string, Task> $definitions */
-        $definitions = collect($items)->map(function($item, string|int $key) use ($jobProvider) {
-            return new Task(
-                name: "{$this->name}:{$key}",
-                jobs: $jobProvider($item),
-                dependsOn: $this->dependsOn,
-            );
-        });
+            $items = $middleware->handle($provider());
 
-        $tasks = $definitionParser->parseTasksFromResolvable($definitions->values());
+            /** @var callable(mixed): (object|array<int, object>) $jobProvider */
+            $jobProvider = $this->jobProvider->getClosure();
 
-        $workflow = Workflow::query()->findOrFail($this->getWorkflowId());
-        $workflowRepository->appendTasks($workflow, $tasks);
+            /** @var Collection<int|string, Task> $definitions */
+            $definitions = collect($items)->map(function($item, string|int $key) use ($jobProvider) {
+                return new Task(
+                    name: "{$this->name}:{$key}",
+                    jobs: $jobProvider($item),
+                    dependsOn: $this->dependsOn,
+                );
+            });
+
+            $tasks = $definitionParser->parseTasksFromResolvable($definitions->values());
+
+            $workflow = Workflow::query()->findOrFail($this->getWorkflowId());
+            $workflowRepository->appendTasks($workflow, $tasks);
+        } catch (Throwable $e) {
+            Log::error('ResolvableTaskResolverJob failed', [
+                'workflowId' => $this->getWorkflowId(),
+                'taskName' => $this->name,
+                'exception' => $e,
+            ]);
+
+            throw $e;
+        }
     }
 }

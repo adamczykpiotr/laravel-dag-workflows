@@ -19,6 +19,7 @@ class DagWorkflowsServiceProvider extends PackageServiceProvider {
          */
         $package
             ->name('dag-workflows')
+            ->hasConfigFile('dag-workflows')
             ->discoversMigrations()
             ->runsMigrations();
     }

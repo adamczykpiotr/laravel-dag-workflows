@@ -114,6 +114,12 @@ dump($model->id);
 Jobs using `HasWorkflowTracking` can call `$this->progress(int $percentage)` (0–100).
 Writes are debounced against the step row's `updated_at` (30s window); `100` and `progress(..., force: true)` always write.
 
+## Limiting `ResolvableTask` items per environment
+
+`config/dag-workflows.php` points at a middleware applied to the items before tasks are materialised. The default is `PassthroughMiddleware` although for testing purposes there's also handy implementation of `TakeFirstMiddleware`.
+
+Custom middlewares have to implement `WorkflowResolvableItemsMiddleware::handle(iterable $items): iterable` interface.
+
 ## Testing
 Run the package and application tests:
 

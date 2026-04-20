@@ -5,14 +5,11 @@ namespace AdamczykPiotr\DagWorkflows\Http\Controllers;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowResource;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
+use AdamczykPiotr\DagWorkflows\Services\WorkflowEstimator;
 use Illuminate\Http\JsonResponse;
 
 class WorkflowController {
 
-    /**
-     * @param int $id
-     * @return JsonResponse
-     */
     public function show(int $id): JsonResponse {
         $workflow = Workflow::query()
             ->with([
@@ -23,8 +20,10 @@ class WorkflowController {
                 ],
             ])->findOrFail($id);
 
+        $estimate = (new WorkflowEstimator())->build($workflow);
+
         return response()->json(
-            new WorkflowResource($workflow)
+            new WorkflowResource($workflow, $estimate)
         );
     }
 }

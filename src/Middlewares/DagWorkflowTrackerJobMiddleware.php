@@ -106,6 +106,13 @@ class DagWorkflowTrackerJobMiddleware {
      * @throws Throwable
      */
     protected function completeWorkflowTaskStep(WorkflowTaskStep $step): void {
+        $step->refresh();
+
+        // If step was paused during execution (approval required), don't auto-complete
+        if ($step->status === RunStatus::PAUSED) {
+            return;
+        }
+
         DB::transaction(function() use ($step) {
             $step->status = RunStatus::COMPLETED;
             $step->completed_at = now();
@@ -117,9 +124,14 @@ class DagWorkflowTrackerJobMiddleware {
 
             $nextStep = $step->nextStep;
 
-            // Continuing steps
-            if ($nextStep instanceof WorkflowTaskStep) {
+            // Continuing steps - only if next step is PENDING (not SUSPENDED)
+            if ($nextStep instanceof WorkflowTaskStep && $nextStep->status === RunStatus::PENDING) {
                 $this->dispatcher->dispatchStep($nextStep);
+                return;
+            }
+
+            // If next step exists but is SUSPENDED, don't dispatch - waiting for approval
+            if ($nextStep instanceof WorkflowTaskStep && $nextStep->status === RunStatus::SUSPENDED) {
                 return;
             }
 

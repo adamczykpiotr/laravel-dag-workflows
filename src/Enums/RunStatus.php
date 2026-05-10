@@ -10,6 +10,8 @@ enum RunStatus: string
 
     case PAUSED = 'PAUSED';
 
+    case SUSPENDED = 'SUSPENDED';
+
     case COMPLETED = 'COMPLETED';
     case FAILED = 'FAILED';
     case CANCELLED = 'CANCELLED';
@@ -18,13 +20,23 @@ enum RunStatus: string
     public function isTerminal(): bool {
         return match ($this) {
             self::COMPLETED, self::FAILED, self::CANCELLED => true,
-            self::PENDING, self::RUNNING, self::PAUSED => false,
+            self::PENDING, self::RUNNING, self::PAUSED, self::SUSPENDED => false,
         };
     }
 
 
     public function isPaused(): bool {
         return $this === self::PAUSED;
+    }
+
+
+    public function isSuspended(): bool {
+        return $this === self::SUSPENDED;
+    }
+
+
+    public function isBlocked(): bool {
+        return $this === self::PAUSED || $this === self::SUSPENDED;
     }
 
 

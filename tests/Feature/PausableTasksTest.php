@@ -74,8 +74,21 @@ describe('RunStatus enum', function() {
         expect(RunStatus::PAUSED->isTerminal())->toBeFalse();
     });
 
+    it('SUSPENDED is not terminal', function() {
+        expect(RunStatus::SUSPENDED->isTerminal())->toBeFalse();
+    });
+
     it('PAUSED returns true for isPaused', function() {
         expect(RunStatus::PAUSED->isPaused())->toBeTrue();
+    });
+
+    it('SUSPENDED returns true for isSuspended', function() {
+        expect(RunStatus::SUSPENDED->isSuspended())->toBeTrue();
+    });
+
+    it('PAUSED and SUSPENDED return true for isBlocked', function() {
+        expect(RunStatus::PAUSED->isBlocked())->toBeTrue();
+        expect(RunStatus::SUSPENDED->isBlocked())->toBeTrue();
     });
 
     it('other statuses return false for isPaused', function() {
@@ -84,6 +97,16 @@ describe('RunStatus enum', function() {
         expect(RunStatus::COMPLETED->isPaused())->toBeFalse();
         expect(RunStatus::FAILED->isPaused())->toBeFalse();
         expect(RunStatus::CANCELLED->isPaused())->toBeFalse();
+        expect(RunStatus::SUSPENDED->isPaused())->toBeFalse();
+    });
+
+    it('other statuses return false for isSuspended', function() {
+        expect(RunStatus::PENDING->isSuspended())->toBeFalse();
+        expect(RunStatus::RUNNING->isSuspended())->toBeFalse();
+        expect(RunStatus::PAUSED->isSuspended())->toBeFalse();
+        expect(RunStatus::COMPLETED->isSuspended())->toBeFalse();
+        expect(RunStatus::FAILED->isSuspended())->toBeFalse();
+        expect(RunStatus::CANCELLED->isSuspended())->toBeFalse();
     });
 
     it('PENDING and RUNNING can be paused', function() {
@@ -97,8 +120,9 @@ describe('RunStatus enum', function() {
         expect(RunStatus::CANCELLED->canBePaused())->toBeFalse();
     });
 
-    it('PAUSED cannot be paused again', function() {
+    it('PAUSED and SUSPENDED cannot be paused again', function() {
         expect(RunStatus::PAUSED->canBePaused())->toBeFalse();
+        expect(RunStatus::SUSPENDED->canBePaused())->toBeFalse();
     });
 
     it('only PAUSED can be resumed', function() {
@@ -108,6 +132,7 @@ describe('RunStatus enum', function() {
         expect(RunStatus::COMPLETED->canBeResumed())->toBeFalse();
         expect(RunStatus::FAILED->canBeResumed())->toBeFalse();
         expect(RunStatus::CANCELLED->canBeResumed())->toBeFalse();
+        expect(RunStatus::SUSPENDED->canBeResumed())->toBeFalse();
     });
 });
 
@@ -478,27 +503,26 @@ describe('Task pause', function() {
         expect($pendingStep->status)->toBe(RunStatus::PAUSED);
     });
 
-    it('pauses workflow when all active tasks are paused', function() {
-        $workflow = createWorkflow(RunStatus::RUNNING);
-        $completedTask = createTask($workflow, RunStatus::COMPLETED, 'completed');
-        $activeTask = createTask($workflow, RunStatus::RUNNING, 'active');
-        createStep($activeTask, RunStatus::RUNNING);
-
-        $activeTask->pause('Last active task');
-
-        $workflow->refresh();
-        expect($workflow->status)->toBe(RunStatus::PAUSED);
-        expect($workflow->pause_reason)->toBe('Last active task');
-    });
-
-    it('does not pause workflow if other tasks are still active', function() {
+    it('suspends dependant tasks when task is paused', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task1 = createTask($workflow, RunStatus::RUNNING, 'task1');
         createStep($task1, RunStatus::RUNNING);
-        $task2 = createTask($workflow, RunStatus::RUNNING, 'task2');
-        createStep($task2, RunStatus::RUNNING);
+        $task2 = createTask($workflow, RunStatus::PENDING, 'task2');
+        createStep($task2, RunStatus::PENDING);
+        linkDependency($task2, $task1);
 
-        $task1->pause();
+        $task1->pause('Review task');
+
+        $task2->refresh();
+        expect($task2->status)->toBe(RunStatus::SUSPENDED);
+    });
+
+    it('does not cascade up to pause workflow', function() {
+        $workflow = createWorkflow(RunStatus::RUNNING);
+        $task = createTask($workflow, RunStatus::RUNNING, 'task');
+        createStep($task, RunStatus::RUNNING);
+
+        $task->pause();
 
         $workflow->refresh();
         expect($workflow->status)->toBe(RunStatus::RUNNING);
@@ -536,33 +560,34 @@ describe('Task resume', function() {
         expect($result)->toBeFalse();
     });
 
-    it('resumes paused steps to pending state', function() {
+    it('resumes paused and suspended steps to pending state', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task = createTask($workflow, RunStatus::PAUSED);
-        $pausedStep = createStep($task, RunStatus::PAUSED);
-        $pausedStep->paused_at = now();
-        $pausedStep->save();
+        $pausedStep = createStep($task, RunStatus::PAUSED, 1);
+        $suspendedStep = createStep($task, RunStatus::SUSPENDED, 2);
 
         $task->resume();
 
         $pausedStep->refresh();
+        $suspendedStep->refresh();
         expect($pausedStep->status)->toBe(RunStatus::PENDING);
-        expect($pausedStep->paused_at)->toBeNull();
+        expect($suspendedStep->status)->toBe(RunStatus::PENDING);
     });
 
-    it('resumes paused workflow when task is resumed', function() {
-        $workflow = createWorkflow(RunStatus::PAUSED);
-        $workflow->paused_at = now();
-        $workflow->save();
+    it('unsuspends dependant tasks when task is resumed', function() {
+        $workflow = createWorkflow(RunStatus::RUNNING);
+        $task1 = createTask($workflow, RunStatus::PAUSED, 'task1');
+        createStep($task1, RunStatus::PAUSED);
+        $task2 = createTask($workflow, RunStatus::SUSPENDED, 'task2');
+        $step2 = createStep($task2, RunStatus::SUSPENDED);
+        linkDependency($task2, $task1);
 
-        $task = createTask($workflow, RunStatus::PAUSED);
-        $step = createStep($task, RunStatus::PAUSED);
+        $task1->resume();
 
-        $task->resume();
-
-        $workflow->refresh();
-        expect($workflow->status)->toBe(RunStatus::RUNNING);
-        expect($workflow->paused_at)->toBeNull();
+        $task2->refresh();
+        $step2->refresh();
+        expect($task2->status)->toBe(RunStatus::PENDING);
+        expect($step2->status)->toBe(RunStatus::PENDING);
     });
 });
 
@@ -716,41 +741,46 @@ describe('Step pause', function() {
         expect($step->status)->toBe(RunStatus::COMPLETED);
     });
 
-    it('pauses task when all steps are paused or terminal', function() {
-        $workflow = createWorkflow(RunStatus::RUNNING);
-        $task = createTask($workflow, RunStatus::RUNNING);
-        $completedStep = createStep($task, RunStatus::COMPLETED, 1);
-        $runningStep = createStep($task, RunStatus::RUNNING, 2);
-
-        $runningStep->pause('Pausing last active step');
-
-        $task->refresh();
-        expect($task->status)->toBe(RunStatus::PAUSED);
-        expect($task->paused_at)->not->toBeNull();
-    });
-
-    it('does not pause task if other steps are still active', function() {
+    it('suspends subsequent steps when step is paused', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task = createTask($workflow, RunStatus::RUNNING);
         $step1 = createStep($task, RunStatus::RUNNING, 1);
         $step2 = createStep($task, RunStatus::PENDING, 2);
+        $step3 = createStep($task, RunStatus::PENDING, 3);
 
-        $step1->pause();
+        $step1->pause('Needs review');
 
-        $task->refresh();
-        expect($task->status)->toBe(RunStatus::RUNNING);
+        $step2->refresh();
+        $step3->refresh();
+        expect($step2->status)->toBe(RunStatus::SUSPENDED);
+        expect($step3->status)->toBe(RunStatus::SUSPENDED);
     });
 
-    it('pauses workflow when pausing step causes all tasks to be paused', function() {
+    it('suspends dependant tasks when step is paused', function() {
+        $workflow = createWorkflow(RunStatus::RUNNING);
+        $task1 = createTask($workflow, RunStatus::RUNNING, 'task1');
+        $step1 = createStep($task1, RunStatus::RUNNING);
+        $task2 = createTask($workflow, RunStatus::PENDING, 'task2');
+        createStep($task2, RunStatus::PENDING);
+        linkDependency($task2, $task1);
+
+        $step1->pause('Needs review');
+
+        $task2->refresh();
+        expect($task2->status)->toBe(RunStatus::SUSPENDED);
+    });
+
+    it('does not cascade up to pause task or workflow', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task = createTask($workflow, RunStatus::RUNNING);
         $step = createStep($task, RunStatus::RUNNING);
 
-        $step->pause('Cascade pause');
+        $step->pause('Needs review');
 
+        $task->refresh();
         $workflow->refresh();
-        expect($workflow->status)->toBe(RunStatus::PAUSED);
-        expect($workflow->pause_reason)->toBe('Cascade pause');
+        expect($task->status)->toBe(RunStatus::RUNNING);
+        expect($workflow->status)->toBe(RunStatus::RUNNING);
     });
 });
 
@@ -761,7 +791,7 @@ describe('Step pause', function() {
 */
 
 describe('Step resume', function() {
-    it('can resume a paused step', function() {
+    it('can resume a paused step and marks it completed', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task = createTask($workflow, RunStatus::RUNNING);
         $step = createStep($task, RunStatus::PAUSED);
@@ -773,7 +803,8 @@ describe('Step resume', function() {
 
         expect($result)->toBeTrue();
         $step->refresh();
-        expect($step->status)->toBe(RunStatus::PENDING);
+        expect($step->status)->toBe(RunStatus::COMPLETED);
+        expect($step->completed_at)->not->toBeNull();
         expect($step->paused_at)->toBeNull();
         expect($step->pause_reason)->toBeNull();
     });
@@ -798,31 +829,46 @@ describe('Step resume', function() {
         expect($result)->toBeFalse();
     });
 
-    it('resumes task when step is resumed', function() {
+    it('unsuspends subsequent steps when step is resumed', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
-        $task = createTask($workflow, RunStatus::PAUSED);
-        $task->paused_at = now();
-        $task->save();
-        $step = createStep($task, RunStatus::PAUSED);
+        $task = createTask($workflow, RunStatus::RUNNING);
+        $step1 = createStep($task, RunStatus::PAUSED, 1);
+        $step2 = createStep($task, RunStatus::SUSPENDED, 2);
+        $step3 = createStep($task, RunStatus::SUSPENDED, 3);
 
-        $step->resume();
+        $step1->resume();
 
-        $task->refresh();
-        expect($task->status)->toBe(RunStatus::RUNNING);
-        expect($task->paused_at)->toBeNull();
+        $step2->refresh();
+        $step3->refresh();
+        expect($step2->status)->toBe(RunStatus::PENDING);
+        expect($step3->status)->toBe(RunStatus::PENDING);
     });
 
-    it('resumes workflow when step is resumed', function() {
-        $workflow = createWorkflow(RunStatus::PAUSED);
-        $workflow->paused_at = now();
-        $workflow->save();
-        $task = createTask($workflow, RunStatus::PAUSED);
-        $step = createStep($task, RunStatus::PAUSED);
+    it('unsuspends dependant tasks when step is resumed', function() {
+        $workflow = createWorkflow(RunStatus::RUNNING);
+        $task1 = createTask($workflow, RunStatus::RUNNING, 'task1');
+        $step1 = createStep($task1, RunStatus::PAUSED);
+        $task2 = createTask($workflow, RunStatus::SUSPENDED, 'task2');
+        $step2 = createStep($task2, RunStatus::SUSPENDED);
+        linkDependency($task2, $task1);
 
-        $step->resume();
+        $step1->resume();
 
-        $workflow->refresh();
-        expect($workflow->status)->toBe(RunStatus::RUNNING);
+        $task2->refresh();
+        $step2->refresh();
+        expect($task2->status)->toBe(RunStatus::PENDING);
+        expect($step2->status)->toBe(RunStatus::PENDING);
+    });
+
+    it('dispatches next step when step is resumed', function() {
+        $workflow = createWorkflow(RunStatus::RUNNING);
+        $task = createTask($workflow, RunStatus::RUNNING);
+        $step1 = createStep($task, RunStatus::PAUSED, 1);
+        $step2 = createStep($task, RunStatus::SUSPENDED, 2);
+
+        $step1->resume();
+
+        Queue::assertPushed(TestPausableJob::class);
     });
 });
 
@@ -936,43 +982,45 @@ describe('Step cancel', function() {
 */
 
 describe('Complex scenarios', function() {
-    it('handles pause-resume-complete cycle', function() {
+    it('handles pause-resume-complete cycle with downstream suspension', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
-        $task = createTask($workflow, RunStatus::RUNNING);
-        $step = createStep($task, RunStatus::RUNNING);
+        $task1 = createTask($workflow, RunStatus::RUNNING, 'task1');
+        $step1 = createStep($task1, RunStatus::RUNNING);
+        $task2 = createTask($workflow, RunStatus::PENDING, 'task2');
+        $step2 = createStep($task2, RunStatus::PENDING);
+        linkDependency($task2, $task1);
 
-        // Pause
-        $step->pause('Needs review');
-        expect($step->refresh()->status)->toBe(RunStatus::PAUSED);
-        expect($task->refresh()->status)->toBe(RunStatus::PAUSED);
-        expect($workflow->refresh()->status)->toBe(RunStatus::PAUSED);
-
-        // Resume - step goes to PENDING, task and workflow go to RUNNING
-        $step->resume();
-        expect($step->refresh()->status)->toBe(RunStatus::PENDING);
-        expect($task->refresh()->status)->toBe(RunStatus::RUNNING);
+        // Pause step - downstream gets suspended, task/workflow stay running
+        $step1->pause('Needs review');
+        expect($step1->refresh()->status)->toBe(RunStatus::PAUSED);
+        expect($task2->refresh()->status)->toBe(RunStatus::SUSPENDED);
         expect($workflow->refresh()->status)->toBe(RunStatus::RUNNING);
+
+        // Resume - step becomes COMPLETED, downstream unsuspended
+        $step1->resume();
+        expect($step1->refresh()->status)->toBe(RunStatus::COMPLETED);
+        expect($task2->refresh()->status)->toBe(RunStatus::PENDING);
     });
 
-    it('handles partial pause with multiple parallel tasks', function() {
+    it('handles partial pause with multiple parallel tasks - workflow stays running', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task1 = createTask($workflow, RunStatus::RUNNING, 'task1');
         $step1 = createStep($task1, RunStatus::RUNNING);
         $task2 = createTask($workflow, RunStatus::RUNNING, 'task2');
         $step2 = createStep($task2, RunStatus::RUNNING);
 
-        // Pause only task1
+        // Pause only task1 - workflow stays running because task2 is still active
         $task1->pause('Review task1');
 
         expect($task1->refresh()->status)->toBe(RunStatus::PAUSED);
         expect($task2->refresh()->status)->toBe(RunStatus::RUNNING);
         expect($workflow->refresh()->status)->toBe(RunStatus::RUNNING);
 
-        // Pause task2 - now workflow should pause
+        // Pause task2 - workflow still stays running (tasks don't cascade up)
         $task2->pause('Review task2');
 
         expect($task2->refresh()->status)->toBe(RunStatus::PAUSED);
-        expect($workflow->refresh()->status)->toBe(RunStatus::PAUSED);
+        expect($workflow->refresh()->status)->toBe(RunStatus::RUNNING);
     });
 
     it('handles cascading cancellation through dependencies', function() {
@@ -1003,7 +1051,7 @@ describe('Complex scenarios', function() {
         expect($workflow->refresh()->status)->toBe(RunStatus::CANCELLED);
     });
 
-    it('preserves pause reason through hierarchy (step and workflow only)', function() {
+    it('preserves pause reason on step only (no cascade up)', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task = createTask($workflow, RunStatus::RUNNING);
         $step1 = createStep($task, RunStatus::COMPLETED, 1);
@@ -1012,8 +1060,8 @@ describe('Complex scenarios', function() {
         $step2->pause('Data validation required');
 
         expect($step2->refresh()->pause_reason)->toBe('Data validation required');
-        expect($task->refresh()->status)->toBe(RunStatus::PAUSED);
-        expect($workflow->refresh()->pause_reason)->toBe('Data validation required');
+        expect($task->refresh()->status)->toBe(RunStatus::RUNNING);
+        expect($workflow->refresh()->status)->toBe(RunStatus::RUNNING);
     });
 
     it('clears pause fields when cancelling paused entities', function() {

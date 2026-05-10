@@ -9,8 +9,10 @@ Workflows, tasks, and steps can be paused for manual intervention. This feature 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Status Types](#status-types)
 - [Pause Reason Hierarchy](#pause-reason-hierarchy)
 - [Basic Usage](#basic-usage)
+- [How Step Pause Works](#how-step-pause-works)
 - [Job Example: Self-Pausing on Anomaly Detection](#job-example-self-pausing-on-anomaly-detection)
 - [Events](#events)
 - [Status Helpers](#status-helpers)
@@ -18,13 +20,27 @@ Workflows, tasks, and steps can be paused for manual intervention. This feature 
 
 ## Overview
 
-The pausable tasks feature introduces a `PAUSED` status to the workflow system. When an entity is paused:
+The pausable tasks feature introduces two blocking statuses to the workflow system:
 
-1. **Steps**: The step execution halts; the job is not retried
-2. **Tasks**: All active steps within the task are paused
-3. **Workflows**: All active tasks and their steps are paused
+- **PAUSED** - The entity was explicitly paused and requires approval to continue
+- **SUSPENDED** - The entity is blocked because an upstream dependency is paused
 
-Pausing cascades downward (workflow → tasks → steps), while resuming restores entities to their pre-pause state.
+When a step or task is paused, the workflow **does not cascade upward**. Instead, it **suspends downstream** dependencies:
+- Subsequent steps in the same task become SUSPENDED
+- Dependant tasks and their steps become SUSPENDED
+- The workflow and task can continue running other independent branches
+
+## Status Types
+
+| Status | Meaning |
+|--------|---------|
+| PENDING | Ready to run, waiting for dependencies |
+| RUNNING | Currently executing |
+| PAUSED | Explicitly paused, awaiting approval |
+| SUSPENDED | Blocked by upstream PAUSED entity |
+| COMPLETED | Successfully finished |
+| FAILED | Execution failed |
+| CANCELLED | Manually cancelled |
 
 ## Pause Reason Hierarchy
 
@@ -87,9 +103,91 @@ $task->cancel();
 $step->cancel();
 ```
 
+## How Step Pause Works
+
+When you call `$step->pause()` from within a running job:
+
+1. **The current job continues to execute** - calling `pause()` does not stop PHP execution
+2. **The step is marked as PAUSED** - the middleware detects this and does not auto-complete the step
+3. **Subsequent steps are SUSPENDED** - they won't run until the step is approved
+4. **Dependant tasks are SUSPENDED** - downstream tasks wait for approval
+5. **Workflow stays RUNNING** - other independent branches continue executing
+
+When you call `$step->resume()` to approve:
+
+1. **The step is marked COMPLETED** - the job already ran successfully
+2. **Suspended steps become PENDING** - ready to be dispatched
+3. **Suspended tasks become PENDING** - ready to run when dependencies complete
+4. **The next step is dispatched** - workflow continues
+
+**Important**: Since you cannot re-run a paused step, jobs that need approval should be **split into two steps**:
+1. **Validation job** - analyzes data and calls `pause()` if issues are found
+2. **Processing job** - runs after approval, does the actual work
+
 ## Job Example: Self-Pausing on Anomaly Detection
 
-Here's a complete example of a job that detects anomalies and pauses itself for manual review:
+Here's a complete example using two jobs - one for validation that can pause, and one for processing:
+
+### Step 1: Validation Job (can pause)
+
+```php
+<?php
+
+namespace App\Jobs;
+
+use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+
+class ValidateDataJob implements ShouldQueue
+{
+    use HasWorkflowTracking, InteractsWithQueue, Queueable, SerializesModels;
+
+    public function __construct(
+        private readonly int $batchId,
+        private readonly float $anomalyThreshold = 0.05,
+    ) {}
+
+    public function handle(): void
+    {
+        $records = $this->fetchRecords();
+        $anomalies = $this->detectAnomalies($records);
+        $anomalyRate = count($anomalies) / count($records);
+
+        if ($anomalyRate > $this->anomalyThreshold) {
+            // Store anomaly details for review
+            cache()->put(
+                "workflow:{$this->workflowTaskStep->workflow_id}:anomalies",
+                $anomalies,
+                now()->addDays(7)
+            );
+
+            // Pause the step - job continues but downstream is blocked
+            $this->workflowTaskStep->pause(
+                sprintf(
+                    'High anomaly rate: %.1f%% (%d/%d records). Review required.',
+                    $anomalyRate * 100,
+                    count($anomalies),
+                    count($records)
+                )
+            );
+
+            // Job continues executing and finishes normally
+            // But the step will be PAUSED, not COMPLETED
+            return;
+        }
+
+        // No issues - step will auto-complete and next step runs
+    }
+
+    private function fetchRecords(): array { /* ... */ return []; }
+    private function detectAnomalies(array $records): array { /* ... */ return []; }
+}
+```
+
+### Step 2: Processing Job (runs after approval)
 
 ```php
 <?php
@@ -106,81 +204,24 @@ class ProcessDataJob implements ShouldQueue
 {
     use HasWorkflowTracking, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(
-        private readonly int $batchId,
-        private readonly float $anomalyThreshold = 0.15,
-    ) {}
+    public function __construct(private readonly int $batchId) {}
 
     public function handle(): void
     {
+        // This job only runs after validation is approved
         $records = $this->fetchRecords();
-        $totalRecords = count($records);
-        $processedCount = 0;
-        $anomalies = [];
-
-        foreach ($records as $index => $record) {
-            $result = $this->processRecord($record);
-
-            if ($result['anomaly_score'] > $this->anomalyThreshold) {
-                $anomalies[] = [
-                    'record_id' => $record['id'],
-                    'score' => $result['anomaly_score'],
-                    'details' => $result['anomaly_details'],
-                ];
-            }
-
-            $processedCount++;
-
-            // Report progress (debounced to every 30s by default)
-            $this->progress((int) (($processedCount / $totalRecords) * 100));
+        
+        foreach ($records as $record) {
+            $this->processRecord($record);
         }
-
-        // Check if anomalies exceed acceptable threshold
-        $anomalyRate = count($anomalies) / $totalRecords;
-
-        if ($anomalyRate > 0.05) {
-            // Store anomaly details for review
-            cache()->put(
-                "workflow:{$this->workflowTaskStep->workflow_id}:anomalies",
-                $anomalies,
-                now()->addDays(7)
-            );
-
-            // Pause the step for manual review
-            $this->workflowTaskStep->pause(
-                sprintf(
-                    'High anomaly rate detected: %.1f%% (%d/%d records). Manual review required.',
-                    $anomalyRate * 100,
-                    count($anomalies),
-                    $totalRecords
-                )
-            );
-
-            return;
-        }
-
-        // Mark step as completed if no issues
-        $this->progress(100, force: true);
     }
-
-    private function fetchRecords(): array
-    {
-        // Your data fetching logic
-        return [];
-    }
-
-    private function processRecord(array $record): array
-    {
-        // Your processing logic that returns anomaly detection results
-        return [
-            'anomaly_score' => 0.0,
-            'anomaly_details' => null,
-        ];
-    }
+    
+    private function fetchRecords(): array { /* ... */ return []; }
+    private function processRecord(array $record): void { /* ... */ }
 }
 ```
 
-### Using the Job in a Workflow
+### Using the Jobs in a Workflow
 
 ```php
 use AdamczykPiotr\DagWorkflows\Definitions\Task;
@@ -194,18 +235,19 @@ $workflow = new Workflow(
             jobs: new FetchDataJob(),
         ),
         new Task(
-            name: 'process_data',
+            name: 'validate_and_process',
             jobs: [
-                new ProcessDataJob(batchId: 1, anomalyThreshold: 0.10),
-                new ProcessDataJob(batchId: 2, anomalyThreshold: 0.10),
-                new ProcessDataJob(batchId: 3, anomalyThreshold: 0.10),
+                // Step 1: Validation - can pause if issues found
+                new ValidateDataJob(batchId: 1),
+                // Step 2: Processing - only runs after validation is approved
+                new ProcessDataJob(batchId: 1),
             ],
             dependsOn: 'fetch_data',
         ),
         new Task(
             name: 'aggregate_results',
             jobs: new AggregateResultsJob(),
-            dependsOn: 'process_data',
+            dependsOn: 'validate_and_process',
         ),
     ],
 );
@@ -258,7 +300,7 @@ protected $listen = [
 
 ### Building a Review Interface
 
-Example controller for reviewing and managing paused workflows:
+Example controller for reviewing and managing paused steps:
 
 ```php
 <?php
@@ -267,81 +309,88 @@ namespace App\Http\Controllers;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
+use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use Illuminate\Http\Request;
 
 class WorkflowReviewController extends Controller
 {
     public function index()
     {
-        $pausedWorkflows = Workflow::query()
+        // Find all paused steps awaiting approval
+        $pausedSteps = WorkflowTaskStep::query()
             ->where('status', RunStatus::PAUSED)
-            ->with(['tasks' => fn($q) => $q->where('status', RunStatus::PAUSED)])
+            ->with(['task.workflow'])
             ->orderBy('paused_at', 'desc')
             ->paginate(20);
 
-        return view('workflows.review.index', compact('pausedWorkflows'));
+        return view('workflows.review.index', compact('pausedSteps'));
     }
 
-    public function show(Workflow $workflow)
+    public function show(WorkflowTaskStep $step)
     {
+        $workflow = $step->task->workflow;
         $anomalies = cache()->get("workflow:{$workflow->id}:anomalies", []);
 
-        $pausedSteps = $workflow->tasks()
-            ->with(['steps' => fn($q) => $q->where('status', RunStatus::PAUSED)])
-            ->get()
-            ->pluck('steps')
-            ->flatten();
+        // Show suspended downstream
+        $suspendedSteps = $step->task->steps()
+            ->where('status', RunStatus::SUSPENDED)
+            ->get();
 
-        return view('workflows.review.show', compact('workflow', 'anomalies', 'pausedSteps'));
+        return view('workflows.review.show', compact('step', 'workflow', 'anomalies', 'suspendedSteps'));
     }
 
-    public function resume(Request $request, Workflow $workflow)
+    public function approve(Request $request, WorkflowTaskStep $step)
     {
         $request->validate([
             'resolution_notes' => 'nullable|string|max:1000',
         ]);
 
-        // Log the resolution
+        $workflow = $step->task->workflow;
+
+        // Log the approval
         activity()
-            ->performedOn($workflow)
+            ->performedOn($step)
             ->withProperties([
                 'resolution_notes' => $request->resolution_notes,
-                'resolved_by' => auth()->id(),
+                'approved_by' => auth()->id(),
             ])
-            ->log('Workflow resumed after review');
+            ->log('Step approved after review');
 
         // Clear cached anomalies
         cache()->forget("workflow:{$workflow->id}:anomalies");
 
-        // Resume the workflow
-        $workflow->resume();
+        // Resume the step - marks it COMPLETED and unsuspends downstream
+        $step->resume();
 
         return redirect()
             ->route('workflows.review.index')
-            ->with('success', "Workflow #{$workflow->id} resumed successfully.");
+            ->with('success', "Step approved. Workflow continuing.");
     }
 
-    public function cancel(Request $request, Workflow $workflow)
+    public function reject(Request $request, WorkflowTaskStep $step)
     {
         $request->validate([
-            'cancellation_reason' => 'required|string|max:1000',
+            'rejection_reason' => 'required|string|max:1000',
         ]);
 
+        $workflow = $step->task->workflow;
+
         activity()
-            ->performedOn($workflow)
+            ->performedOn($step)
             ->withProperties([
-                'cancellation_reason' => $request->cancellation_reason,
-                'cancelled_by' => auth()->id(),
+                'rejection_reason' => $request->rejection_reason,
+                'rejected_by' => auth()->id(),
             ])
-            ->log('Workflow cancelled after review');
+            ->log('Step rejected - cancelling');
 
         cache()->forget("workflow:{$workflow->id}:anomalies");
 
-        $workflow->cancel();
+        // Cancel the step - also cancels subsequent steps and dependant tasks
+        $step->cancel();
 
         return redirect()
             ->route('workflows.review.index')
-            ->with('success', "Workflow #{$workflow->id} cancelled.");
+            ->with('success', "Step rejected and cancelled.");
     }
 }
 ```
@@ -383,9 +432,11 @@ The `RunStatus` enum provides helper methods for working with pause states:
 ```php
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 
-$status = $workflow->status;
+$status = $step->status;
 
 $status->isPaused();      // true if PAUSED
+$status->isSuspended();   // true if SUSPENDED
+$status->isBlocked();     // true if PAUSED or SUSPENDED
 $status->canBePaused();   // true if PENDING or RUNNING
 $status->canBeResumed();  // true if PAUSED
 $status->isTerminal();    // true if COMPLETED, FAILED, or CANCELLED
@@ -421,12 +472,13 @@ $step->pause('Anomaly detected. See cached context for details.');
 
 ```php
 // In your monitoring/alerting system
-Workflow::query()
+WorkflowTaskStep::query()
     ->where('status', RunStatus::PAUSED)
     ->where('paused_at', '<', now()->subHours(24))
-    ->each(function ($workflow) {
-        // Alert: Workflow has been paused for over 24 hours
-        Alert::critical("Workflow {$workflow->id} paused for over 24 hours");
+    ->with('task.workflow')
+    ->each(function ($step) {
+        // Alert: Step has been paused for over 24 hours
+        Alert::critical("Step {$step->id} in workflow {$step->task->workflow->name} paused for over 24 hours");
     });
 ```
 

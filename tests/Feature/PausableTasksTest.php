@@ -1278,9 +1278,8 @@ describe('Events', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $workflow->pause('Test reason');
 
-        Event::assertDispatched(WorkflowPaused::class, function ($event) use ($workflow) {
-            return $event->getWorkflow()->id === $workflow->id
-                && $event->step === null
+        Event::assertDispatched(WorkflowPaused::class, function ($event) {
+            return $event->step === null
                 && $event->reason === 'Test reason';
         });
     });
@@ -1294,9 +1293,8 @@ describe('Events', function() {
 
         $task->pause('Task paused');
 
-        Event::assertDispatched(WorkflowPaused::class, function ($event) use ($workflow) {
-            return $event->getWorkflow()->id === $workflow->id
-                && $event->step === null
+        Event::assertDispatched(WorkflowPaused::class, function ($event) {
+            return $event->step === null
                 && $event->reason === 'Task paused';
         });
     });
@@ -1311,7 +1309,7 @@ describe('Events', function() {
         $step->pause('Step paused');
 
         Event::assertDispatched(WorkflowPaused::class, function ($event) use ($workflow, $task, $step) {
-            return $event->getWorkflow()->id === $workflow->id
+            return $event->step->task->workflow->id === $workflow->id
                 && $event->step->task->id === $task->id
                 && $event->step->id === $step->id
                 && $event->reason === 'Step paused';
@@ -1327,9 +1325,8 @@ describe('Events', function() {
 
         $workflow->resume();
 
-        Event::assertDispatched(WorkflowResumed::class, function ($event) use ($workflow) {
-            return $event->getWorkflow()->id === $workflow->id
-                && $event->step === null;
+        Event::assertDispatched(WorkflowResumed::class, function ($event) {
+            return $event->step === null;
         });
     });
 
@@ -1342,9 +1339,8 @@ describe('Events', function() {
 
         $task->resume();
 
-        Event::assertDispatched(WorkflowResumed::class, function ($event) use ($workflow) {
-            return $event->getWorkflow()->id === $workflow->id
-                && $event->step === null;
+        Event::assertDispatched(WorkflowResumed::class, function ($event) {
+            return $event->step === null;
         });
     });
 
@@ -1358,7 +1354,7 @@ describe('Events', function() {
         $step->resume();
 
         Event::assertDispatched(WorkflowResumed::class, function ($event) use ($workflow, $task, $step) {
-            return $event->getWorkflow()->id === $workflow->id
+            return $event->step->task->workflow->id === $workflow->id
                 && $event->step->task->id === $task->id
                 && $event->step->id === $step->id;
         });
@@ -1370,9 +1366,8 @@ describe('Events', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $workflow->cancel();
 
-        Event::assertDispatched(WorkflowCancelled::class, function ($event) use ($workflow) {
-            return $event->getWorkflow()->id === $workflow->id
-                && $event->step === null;
+        Event::assertDispatched(WorkflowCancelled::class, function ($event) {
+            return $event->step === null;
         });
     });
 
@@ -1385,9 +1380,8 @@ describe('Events', function() {
 
         $task->cancel();
 
-        Event::assertDispatched(WorkflowCancelled::class, function ($event) use ($workflow) {
-            return $event->getWorkflow()->id === $workflow->id
-                && $event->step === null;
+        Event::assertDispatched(WorkflowCancelled::class, function ($event) {
+            return $event->step === null;
         });
     });
 
@@ -1401,7 +1395,7 @@ describe('Events', function() {
         $step->cancel();
 
         Event::assertDispatched(WorkflowCancelled::class, function ($event) use ($workflow, $task, $step) {
-            return $event->getWorkflow()->id === $workflow->id
+            return $event->step->task->workflow->id === $workflow->id
                 && $event->step->task->id === $task->id
                 && $event->step->id === $step->id;
         });

@@ -212,7 +212,7 @@ class WorkflowDispatcher {
                 ->update($this->buildStepPauseUpdate($reason));
         });
 
-        WorkflowPaused::dispatch(null, $workflow, $reason);
+        WorkflowPaused::dispatch(null, $reason);
 
         return true;
     }
@@ -244,7 +244,7 @@ class WorkflowDispatcher {
                 ->update($this->buildStepResumeUpdate());
         });
 
-        WorkflowResumed::dispatch(null, $workflow);
+        WorkflowResumed::dispatch();
 
         return $this->dispatchWorkflow($workflow, force: true);
     }
@@ -277,7 +277,7 @@ class WorkflowDispatcher {
                 ->update($this->buildStepCancelUpdate());
         });
 
-        WorkflowCancelled::dispatch(null, $workflow);
+        WorkflowCancelled::dispatch();
 
         return true;
     }
@@ -308,7 +308,7 @@ class WorkflowDispatcher {
             $this->suspendDependantTasks($task);
         });
 
-        WorkflowPaused::dispatch(null, $workflow, $reason);
+        WorkflowPaused::dispatch(null, $reason);
 
         return true;
     }
@@ -338,7 +338,7 @@ class WorkflowDispatcher {
             $this->unsuspendDependantTasks($task);
         });
 
-        WorkflowResumed::dispatch(null, $workflow);
+        WorkflowResumed::dispatch();
 
         return $this->dispatchTask($task, force: true);
     }
@@ -370,7 +370,7 @@ class WorkflowDispatcher {
             $this->finalizeWorkflowStatus($workflow);
         });
 
-        WorkflowCancelled::dispatch(null, $workflow);
+        WorkflowCancelled::dispatch();
 
         return true;
     }
@@ -400,7 +400,7 @@ class WorkflowDispatcher {
             $this->suspendDependantTasks($task);
         });
 
-        WorkflowPaused::dispatch($step, null, $reason);
+        WorkflowPaused::dispatch($step, $reason);
 
         return true;
     }

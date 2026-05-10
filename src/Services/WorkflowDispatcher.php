@@ -3,10 +3,14 @@
 namespace AdamczykPiotr\DagWorkflows\Services;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
+use AdamczykPiotr\DagWorkflows\Events\WorkflowCancelled;
+use AdamczykPiotr\DagWorkflows\Events\WorkflowPaused;
+use AdamczykPiotr\DagWorkflows\Events\WorkflowResumed;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -18,17 +22,16 @@ class WorkflowDispatcher {
      * @return bool
      */
     public function dispatchWorkflow(Workflow $workflow, bool $force = false): bool {
+        if ($workflow->status !== RunStatus::PENDING && $force === false) {
+            return false;
+        }
+
         $entrypoint = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
             ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
             ->whereDoesntHave(WorkflowTask::RELATION_DEPENDENCIES)
             ->with(WorkflowTask::RELATION_INITIAL_STEP)
             ->get();
-
-        // Prevent overlaps
-        if ($workflow->status !== RunStatus::PENDING && $force === false) {
-            return false;
-        }
 
         $entrypoint->each(fn(WorkflowTask $task) => $this->dispatchTask($task, $force));
         return true;
@@ -41,7 +44,6 @@ class WorkflowDispatcher {
      * @return bool
      */
     public function dispatchTask(WorkflowTask $task, bool $force = false): bool {
-        // Prevent overlaps
         if ($task->status !== RunStatus::PENDING && $force === false) {
             return false;
         }
@@ -79,12 +81,9 @@ class WorkflowDispatcher {
      * @return bool
      */
     public function dispatchStep(WorkflowTaskStep $step, bool $force = false): bool {
-        // Prevent overlaps
         if ($force === false && $step->status !== RunStatus::PENDING) {
             return false;
         }
-
-        // Status will be updated when job will be picked up by queue worker
 
         /** @var object{workflowTaskStep: WorkflowTaskStep} $job */
         $job = unserialize(
@@ -134,28 +133,7 @@ class WorkflowDispatcher {
                 $workflow->save();
             }
 
-            $task->load(WorkflowTask::RELATION_RECURSIVE_DEPENDANTS);
-            $dependantTaskIds = $task->getRecursiveDependantIds();
-
-            if ($dependantTaskIds->isNotEmpty()) {
-                WorkflowTask::query()
-                    ->whereIn(WorkflowTask::ATTRIBUTE_ID, $dependantTaskIds)
-                    ->update([
-                        WorkflowTask::ATTRIBUTE_STATUS => RunStatus::PENDING,
-                        WorkflowTask::ATTRIBUTE_FAILED_AT => null,
-                        WorkflowTask::ATTRIBUTE_COMPLETED_AT => null,
-                        WorkflowTask::ATTRIBUTE_STARTED_AT => null,
-                    ]);
-
-                WorkflowTaskStep::query()
-                    ->whereIn(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $dependantTaskIds)
-                    ->update([
-                        WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PENDING,
-                        WorkflowTaskStep::ATTRIBUTE_FAILED_AT => null,
-                        WorkflowTaskStep::ATTRIBUTE_COMPLETED_AT => null,
-                        WorkflowTaskStep::ATTRIBUTE_STARTED_AT => null,
-                    ]);
-            }
+            $this->resetDependantTasksToPending($task);
         });
 
         return $this->dispatchStep($step);
@@ -183,7 +161,6 @@ class WorkflowDispatcher {
             $workflow->failed_at = now();
             $workflow->save();
 
-            // Cancel rest of the steps from this task
             $task->steps()
                 ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
                 ->update([
@@ -191,25 +168,399 @@ class WorkflowDispatcher {
                     WorkflowTaskStep::ATTRIBUTE_FAILED_AT => now(),
                 ]);
 
-            // Cancel dependant tasks (all levels deep) & their steps
-            $task->load(WorkflowTask::RELATION_RECURSIVE_DEPENDANTS);
-            $cancelledTaskIds = $task->getRecursiveDependantIds();
+            $this->cancelDependantTasks($task, includePaused: false);
+        });
+    }
 
-            if ($cancelledTaskIds->isNotEmpty()) {
-                WorkflowTask::query()
-                    ->whereIn(WorkflowTask::ATTRIBUTE_ID, $cancelledTaskIds)
-                    ->update([
-                        WorkflowTask::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
-                        WorkflowTask::ATTRIBUTE_FAILED_AT => now(),
-                    ]);
 
-                WorkflowTaskStep::query()
-                    ->whereIn(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $cancelledTaskIds)
-                    ->update([
-                        WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
-                        WorkflowTaskStep::ATTRIBUTE_FAILED_AT => now(),
-                    ]);
+    /*
+    |--------------------------------------------------------------------------
+    | Step Pause Operations
+    |--------------------------------------------------------------------------
+    */
+
+
+    /**
+     * @param WorkflowTaskStep $step
+     * @param string|null $reason
+     * @return bool
+     * @throws Throwable
+     */
+    public function pauseStep(WorkflowTaskStep $step, ?string $reason = null): bool {
+        if ($step->status->canBePaused() === false) {
+            return false;
+        }
+
+        $task = $step->task;
+        $workflow = $task->workflow;
+
+        DB::transaction(function() use ($step, $task, $reason) {
+            $step->status = RunStatus::PAUSED;
+            $step->paused_at = now();
+            $step->pause_reason = $reason;
+            $step->save();
+
+            $this->suspendSubsequentSteps($step);
+            $this->suspendDependantTasks($task);
+        });
+
+        WorkflowPaused::dispatch($step, $reason);
+
+        return true;
+    }
+
+
+    /**
+     * @param WorkflowTaskStep $step
+     * @return bool
+     * @throws Throwable
+     */
+    public function resumeStep(WorkflowTaskStep $step): bool {
+        if ($step->status->canBeResumed() === false) {
+            return false;
+        }
+
+        $task = $step->task;
+        $workflow = $task->workflow;
+
+        DB::transaction(function() use ($step, $task) {
+            // Mark the paused step as completed (job already ran successfully)
+            $step->status = RunStatus::COMPLETED;
+            $step->completed_at = now();
+            $step->paused_at = null;
+            $step->pause_reason = null;
+            $step->save();
+
+            $this->unsuspendSubsequentSteps($step);
+            $this->unsuspendDependantTasks($task);
+        });
+
+        WorkflowResumed::dispatch($step);
+
+        // Dispatch the next step if it exists
+        $nextStep = $step->nextStep;
+        if ($nextStep instanceof WorkflowTaskStep) {
+            return $this->dispatchStep($nextStep, force: true);
+        }
+
+        // No next step - complete the task and dispatch dependants
+        return $this->completeTaskAndDispatchDependants($task);
+    }
+
+
+    /**
+     * @param WorkflowTaskStep $step
+     * @return bool
+     * @throws Throwable
+     */
+    public function cancelStep(WorkflowTaskStep $step): bool {
+        if ($step->status->isTerminal()) {
+            return false;
+        }
+
+        $task = $step->task;
+        $workflow = $task->workflow;
+
+        DB::transaction(function() use ($step, $task, $workflow) {
+            $step->status = RunStatus::CANCELLED;
+            $step->failed_at = now();
+            $step->paused_at = null;
+            $step->pause_reason = null;
+            $step->save();
+
+            $task->steps()
+                ->where(WorkflowTaskStep::ATTRIBUTE_ORDER, '>', $step->order)
+                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::nonTerminal())
+                ->update($this->buildStepCancelUpdate());
+
+            $task->status = RunStatus::CANCELLED;
+            $task->failed_at = now();
+            $task->paused_at = null;
+            $task->save();
+
+            $this->cancelDependantTasks($task);
+            $this->finalizeWorkflowStatus($workflow);
+        });
+
+        WorkflowCancelled::dispatch($step);
+
+        return true;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
+
+
+    /**
+     * @param WorkflowTask $task
+     * @return bool
+     * @throws Throwable
+     */
+    protected function completeTaskAndDispatchDependants(WorkflowTask $task): bool {
+        DB::transaction(function() use ($task) {
+            $task->status = RunStatus::COMPLETED;
+            $task->completed_at = now();
+            $task->failed_at = null;
+            $task->paused_at = null;
+            $task->save();
+
+            $this->dispatchDependantTasks($task);
+
+            $workflow = $task->workflow;
+            $allTasksCompleted = $workflow->tasks()
+                ->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
+                ->doesntExist();
+
+            if ($allTasksCompleted === true) {
+                $workflow->status = RunStatus::COMPLETED;
+                $workflow->completed_at = now();
+                $workflow->failed_at = null;
+                $workflow->paused_at = null;
+                $workflow->pause_reason = null;
+                $workflow->save();
             }
         });
+
+        return true;
+    }
+
+
+    /**
+     * @param WorkflowTaskStep $step
+     * @return void
+     */
+    protected function suspendSubsequentSteps(WorkflowTaskStep $step): void {
+        WorkflowTaskStep::query()
+            ->where(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $step->task_id)
+            ->where(WorkflowTaskStep::ATTRIBUTE_ORDER, '>', $step->order)
+            ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::PENDING)
+            ->update([
+                WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::SUSPENDED,
+            ]);
+    }
+
+
+    /**
+     * @param WorkflowTaskStep $step
+     * @return void
+     */
+    protected function unsuspendSubsequentSteps(WorkflowTaskStep $step): void {
+        WorkflowTaskStep::query()
+            ->where(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $step->task_id)
+            ->where(WorkflowTaskStep::ATTRIBUTE_ORDER, '>', $step->order)
+            ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::SUSPENDED)
+            ->update([
+                WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PENDING,
+            ]);
+    }
+
+
+    /**
+     * @param WorkflowTask $task
+     * @return void
+     */
+    protected function suspendDependantTasks(WorkflowTask $task): void {
+        $task->load(WorkflowTask::RELATION_RECURSIVE_DEPENDANTS);
+        $dependantTaskIds = $task->getRecursiveDependantIds();
+
+        if ($dependantTaskIds->isEmpty()) {
+            return;
+        }
+
+        WorkflowTask::query()
+            ->whereIn(WorkflowTask::ATTRIBUTE_ID, $dependantTaskIds)
+            ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
+            ->update([
+                WorkflowTask::ATTRIBUTE_STATUS => RunStatus::SUSPENDED,
+            ]);
+
+        WorkflowTaskStep::query()
+            ->whereIn(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $dependantTaskIds)
+            ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::PENDING)
+            ->update([
+                WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::SUSPENDED,
+            ]);
+    }
+
+
+    /**
+     * @param WorkflowTask $task
+     * @return void
+     */
+    protected function unsuspendDependantTasks(WorkflowTask $task): void {
+        $task->load(WorkflowTask::RELATION_RECURSIVE_DEPENDANTS);
+        $dependantTaskIds = $task->getRecursiveDependantIds();
+
+        if ($dependantTaskIds->isEmpty()) {
+            return;
+        }
+
+        WorkflowTask::query()
+            ->whereIn(WorkflowTask::ATTRIBUTE_ID, $dependantTaskIds)
+            ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::SUSPENDED)
+            ->update([
+                WorkflowTask::ATTRIBUTE_STATUS => RunStatus::PENDING,
+            ]);
+
+        WorkflowTaskStep::query()
+            ->whereIn(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $dependantTaskIds)
+            ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::SUSPENDED)
+            ->update([
+                WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PENDING,
+            ]);
+    }
+
+
+    /**
+     * @param WorkflowTask $task
+     * @param bool $includePaused
+     * @return void
+     */
+    protected function cancelDependantTasks(WorkflowTask $task, bool $includePaused = true): void {
+        $task->load(WorkflowTask::RELATION_RECURSIVE_DEPENDANTS);
+        $dependantTaskIds = $task->getRecursiveDependantIds();
+
+        if ($dependantTaskIds->isEmpty()) {
+            return;
+        }
+
+        $statuses = $includePaused ? RunStatus::nonTerminal() : RunStatus::active();
+        $update = $includePaused ? $this->buildCancelUpdate() : [
+            WorkflowTask::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
+            WorkflowTask::ATTRIBUTE_FAILED_AT => now(),
+        ];
+        $stepUpdate = $includePaused ? $this->buildStepCancelUpdate() : [
+            WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
+            WorkflowTaskStep::ATTRIBUTE_FAILED_AT => now(),
+        ];
+
+        WorkflowTask::query()
+            ->whereIn(WorkflowTask::ATTRIBUTE_ID, $dependantTaskIds)
+            ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, $statuses)
+            ->update($update);
+
+        WorkflowTaskStep::query()
+            ->whereIn(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $dependantTaskIds)
+            ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, $statuses)
+            ->update($stepUpdate);
+    }
+
+
+    /**
+     * @param WorkflowTask $task
+     * @return void
+     */
+    protected function resetDependantTasksToPending(WorkflowTask $task): void {
+        $task->load(WorkflowTask::RELATION_RECURSIVE_DEPENDANTS);
+        $dependantTaskIds = $task->getRecursiveDependantIds();
+
+        if ($dependantTaskIds->isEmpty()) {
+            return;
+        }
+
+        $resetUpdate = [
+            WorkflowTask::ATTRIBUTE_STATUS => RunStatus::PENDING,
+            WorkflowTask::ATTRIBUTE_FAILED_AT => null,
+            WorkflowTask::ATTRIBUTE_COMPLETED_AT => null,
+            WorkflowTask::ATTRIBUTE_STARTED_AT => null,
+        ];
+
+        WorkflowTask::query()
+            ->whereIn(WorkflowTask::ATTRIBUTE_ID, $dependantTaskIds)
+            ->update($resetUpdate);
+
+        WorkflowTaskStep::query()
+            ->whereIn(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $dependantTaskIds)
+            ->update([
+                WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PENDING,
+                WorkflowTaskStep::ATTRIBUTE_FAILED_AT => null,
+                WorkflowTaskStep::ATTRIBUTE_COMPLETED_AT => null,
+                WorkflowTaskStep::ATTRIBUTE_STARTED_AT => null,
+            ]);
+    }
+
+
+    /**
+     * @param Workflow $workflow
+     * @return void
+     */
+    protected function finalizeWorkflowStatus(Workflow $workflow): void {
+        $hasActiveTask = $workflow->tasks()
+            ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::nonTerminal())
+            ->exists();
+
+        if ($hasActiveTask) {
+            return;
+        }
+
+        $allCompleted = $workflow->tasks()
+            ->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
+            ->doesntExist();
+
+        if ($allCompleted) {
+            $workflow->status = RunStatus::COMPLETED;
+            $workflow->completed_at = now();
+        } else {
+            $workflow->status = RunStatus::CANCELLED;
+            $workflow->failed_at = now();
+        }
+
+        $workflow->paused_at = null;
+        $workflow->pause_reason = null;
+        $workflow->save();
+    }
+
+
+    /**
+     * @param string|null $reason
+     * @return array<string, mixed>
+     */
+    protected function buildStepPauseUpdate(?string $reason): array {
+        return [
+            WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PAUSED,
+            WorkflowTaskStep::ATTRIBUTE_PAUSED_AT => now(),
+            WorkflowTaskStep::ATTRIBUTE_PAUSE_REASON => $reason,
+        ];
+    }
+
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function buildStepResumeUpdate(): array {
+        return [
+            WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PENDING,
+            WorkflowTaskStep::ATTRIBUTE_PAUSED_AT => null,
+            WorkflowTaskStep::ATTRIBUTE_PAUSE_REASON => null,
+        ];
+    }
+
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function buildCancelUpdate(): array {
+        return [
+            WorkflowTask::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
+            WorkflowTask::ATTRIBUTE_FAILED_AT => now(),
+            WorkflowTask::ATTRIBUTE_PAUSED_AT => null,
+        ];
+    }
+
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function buildStepCancelUpdate(): array {
+        return [
+            WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
+            WorkflowTaskStep::ATTRIBUTE_FAILED_AT => now(),
+            WorkflowTaskStep::ATTRIBUTE_PAUSED_AT => null,
+            WorkflowTaskStep::ATTRIBUTE_PAUSE_REASON => null,
+        ];
     }
 }

@@ -15,6 +15,8 @@ Key features:
 - Task dependencies and ordering
 - Easy dispatching and inspection via Eloquent models
 - Per-step progress reporting with built-in debounce
+- Pausable tasks for manual intervention (anomaly detection, user approval, etc.)
+- Events for workflow state changes (paused, resumed, cancelled)
 
 ## Installation
 
@@ -113,6 +115,32 @@ dump($model->id);
 
 Jobs using `HasWorkflowTracking` can call `$this->progress(int $percentage)` (0–100).
 Writes are debounced against the step row's `updated_at` (30s window); `100` and `progress(..., force: true)` always write.
+
+## Pausable Tasks
+
+Workflows, tasks, and steps can be paused for manual intervention. This is useful when:
+- An anomaly is detected that requires human review
+- User approval is needed before continuing
+- External validation is required
+
+```php
+use AdamczykPiotr\DagWorkflows\Models\Workflow;
+
+$workflow = Workflow::find($id);
+
+// Pause the entire workflow
+$workflow->pause('Anomaly detected - awaiting manual review');
+
+// Resume when ready
+$workflow->resume();
+
+// Or cancel if not recoverable
+$workflow->cancel();
+```
+
+The package dispatches events (`WorkflowPaused`, `WorkflowResumed`, `WorkflowCancelled`) that you can listen to for notifications and integrations.
+
+For comprehensive documentation including job examples, event handling, and best practices, see **[docs/PAUSABLE_TASKS.md](docs/PAUSABLE_TASKS.md)**.
 
 ## Limiting `ResolvableTask` items per environment
 

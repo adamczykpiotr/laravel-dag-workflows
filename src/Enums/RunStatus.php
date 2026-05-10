@@ -8,15 +8,63 @@ enum RunStatus: string
 
     case RUNNING = 'RUNNING';
 
+    case PAUSED = 'PAUSED';
+
+    case SUSPENDED = 'SUSPENDED';
+
     case COMPLETED = 'COMPLETED';
     case FAILED = 'FAILED';
     case CANCELLED = 'CANCELLED';
 
 
+    public function isActive(): bool {
+        return $this === self::PENDING || $this === self::RUNNING;
+    }
+
+
+    public function isBlocked(): bool {
+        return $this === self::PAUSED || $this === self::SUSPENDED;
+    }
+
+
     public function isTerminal(): bool {
         return match ($this) {
             self::COMPLETED, self::FAILED, self::CANCELLED => true,
-            self::PENDING, self::RUNNING => false,
+            default => false,
         };
+    }
+
+
+    public function canBePaused(): bool {
+        return $this->isActive();
+    }
+
+
+    public function canBeResumed(): bool {
+        return $this === self::PAUSED;
+    }
+
+
+    /**
+     * @return array<int, self>
+     */
+    public static function active(): array {
+        return [self::PENDING, self::RUNNING];
+    }
+
+
+    /**
+     * @return array<int, self>
+     */
+    public static function blocked(): array {
+        return [self::PAUSED, self::SUSPENDED];
+    }
+
+
+    /**
+     * @return array<int, self>
+     */
+    public static function nonTerminal(): array {
+        return [self::PENDING, self::RUNNING, self::PAUSED, self::SUSPENDED];
     }
 }

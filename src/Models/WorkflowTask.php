@@ -23,6 +23,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property RunStatus $status
  * @property Carbon|null $started_at
  * @property Carbon|null $failed_at
+ * @property Carbon|null $paused_at
  * @property Carbon|null $completed_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -49,6 +50,7 @@ class WorkflowTask extends BaseModel {
     const string ATTRIBUTE_STATUS = 'status';
     const string ATTRIBUTE_STARTED_AT = 'started_at';
     const string ATTRIBUTE_FAILED_AT = 'failed_at';
+    const string ATTRIBUTE_PAUSED_AT = 'paused_at';
     const string ATTRIBUTE_COMPLETED_AT = 'completed_at';
     const string ATTRIBUTE_CREATED_AT = 'created_at';
     const string ATTRIBUTE_UPDATED_AT = 'updated_at';
@@ -73,6 +75,7 @@ class WorkflowTask extends BaseModel {
             self::ATTRIBUTE_STATUS => RunStatus::class,
             self::ATTRIBUTE_STARTED_AT => 'datetime',
             self::ATTRIBUTE_FAILED_AT => 'datetime',
+            self::ATTRIBUTE_PAUSED_AT => 'datetime',
             self::ATTRIBUTE_COMPLETED_AT => 'datetime',
         ];
     }

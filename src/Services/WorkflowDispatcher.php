@@ -212,7 +212,7 @@ class WorkflowDispatcher {
                 ->update($this->buildStepPauseUpdate($reason));
         });
 
-        WorkflowPaused::dispatch($workflow, null, null, $reason);
+        WorkflowPaused::dispatch(null, $workflow, $reason);
 
         return true;
     }
@@ -244,7 +244,7 @@ class WorkflowDispatcher {
                 ->update($this->buildStepResumeUpdate());
         });
 
-        WorkflowResumed::dispatch($workflow);
+        WorkflowResumed::dispatch(null, $workflow);
 
         return $this->dispatchWorkflow($workflow, force: true);
     }
@@ -277,7 +277,7 @@ class WorkflowDispatcher {
                 ->update($this->buildStepCancelUpdate());
         });
 
-        WorkflowCancelled::dispatch($workflow);
+        WorkflowCancelled::dispatch(null, $workflow);
 
         return true;
     }
@@ -308,7 +308,7 @@ class WorkflowDispatcher {
             $this->suspendDependantTasks($task);
         });
 
-        WorkflowPaused::dispatch($workflow, $task, null, $reason);
+        WorkflowPaused::dispatch(null, $workflow, $reason);
 
         return true;
     }
@@ -338,7 +338,7 @@ class WorkflowDispatcher {
             $this->unsuspendDependantTasks($task);
         });
 
-        WorkflowResumed::dispatch($workflow, $task);
+        WorkflowResumed::dispatch(null, $workflow);
 
         return $this->dispatchTask($task, force: true);
     }
@@ -370,7 +370,7 @@ class WorkflowDispatcher {
             $this->finalizeWorkflowStatus($workflow);
         });
 
-        WorkflowCancelled::dispatch($workflow, $task);
+        WorkflowCancelled::dispatch(null, $workflow);
 
         return true;
     }
@@ -400,7 +400,7 @@ class WorkflowDispatcher {
             $this->suspendDependantTasks($task);
         });
 
-        WorkflowPaused::dispatch($workflow, $task, $step, $reason);
+        WorkflowPaused::dispatch($step, null, $reason);
 
         return true;
     }
@@ -431,7 +431,7 @@ class WorkflowDispatcher {
             $this->unsuspendDependantTasks($task);
         });
 
-        WorkflowResumed::dispatch($workflow, $task, $step);
+        WorkflowResumed::dispatch($step);
 
         // Dispatch the next step if it exists
         $nextStep = $step->nextStep;
@@ -478,7 +478,7 @@ class WorkflowDispatcher {
             $this->finalizeWorkflowStatus($workflow);
         });
 
-        WorkflowCancelled::dispatch($workflow, $task, $step);
+        WorkflowCancelled::dispatch($step);
 
         return true;
     }

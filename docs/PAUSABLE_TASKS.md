@@ -409,20 +409,23 @@ The package dispatches events when workflows are paused, resumed, or cancelled:
 
 ```php
 // WorkflowPaused
-$event->workflow;  // Always available
-$event->task;      // Available if task was paused
-$event->step;      // Available if step was paused
-$event->reason;    // The pause reason
+$event->step;          // Available if step was paused
+$event->workflow;      // Available if workflow was paused (not step)
+$event->getWorkflow(); // Always returns the workflow (derives from step if needed)
+$event->reason;        // The pause reason
 
 // WorkflowResumed
-$event->workflow;
-$event->task;
-$event->step;
+$event->step;          // Available if step was resumed
+$event->workflow;      // Available if workflow was resumed (not step)
+$event->getWorkflow(); // Always returns the workflow
 
 // WorkflowCancelled
-$event->workflow;
-$event->task;
-$event->step;
+$event->step;          // Available if step was cancelled
+$event->workflow;      // Available if workflow was cancelled (not step)
+$event->getWorkflow(); // Always returns the workflow
+
+// Access task via step when available
+$task = $event->step?->task;
 ```
 
 ## Status Helpers

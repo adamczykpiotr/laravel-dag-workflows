@@ -84,35 +84,4 @@ class Workflow extends BaseModel {
         $dispatcher = resolve(WorkflowDispatcher::class);
         return $dispatcher->dispatchWorkflow($this, $force);
     }
-
-
-    /**
-     * @param string|null $reason
-     * @return bool
-     */
-    public function pause(?string $reason = null): bool {
-        /** @var WorkflowDispatcher $dispatcher */
-        $dispatcher = resolve(WorkflowDispatcher::class);
-        return $dispatcher->pauseWorkflow($this, $reason);
-    }
-
-
-    /**
-     * @return bool
-     */
-    public function resume(): bool {
-        /** @var WorkflowDispatcher $dispatcher */
-        $dispatcher = resolve(WorkflowDispatcher::class);
-        return $dispatcher->resumeWorkflow($this);
-    }
-
-
-    /**
-     * @return bool
-     */
-    public function cancel(): bool {
-        /** @var WorkflowDispatcher $dispatcher */
-        $dispatcher = resolve(WorkflowDispatcher::class);
-        return $dispatcher->cancelWorkflow($this);
-    }
 }

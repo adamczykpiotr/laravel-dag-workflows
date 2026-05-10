@@ -1,6 +1,6 @@
 # Pausable Tasks
 
-Workflows, tasks, and steps can be paused for manual intervention. This feature is essential when:
+Steps can be paused for manual intervention. This feature is essential when:
 - An anomaly is detected that requires human review
 - User approval is needed before continuing
 - External validation is required
@@ -10,7 +10,6 @@ Workflows, tasks, and steps can be paused for manual intervention. This feature 
 
 - [Overview](#overview)
 - [Status Types](#status-types)
-- [Pause Reason Hierarchy](#pause-reason-hierarchy)
 - [Basic Usage](#basic-usage)
 - [How Step Pause Works](#how-step-pause-works)
 - [Job Example: Self-Pausing on Anomaly Detection](#job-example-self-pausing-on-anomaly-detection)
@@ -22,13 +21,13 @@ Workflows, tasks, and steps can be paused for manual intervention. This feature 
 
 The pausable tasks feature introduces two blocking statuses to the workflow system:
 
-- **PAUSED** - The entity was explicitly paused and requires approval to continue
-- **SUSPENDED** - The entity is blocked because an upstream dependency is paused
+- **PAUSED** - The step was explicitly paused and requires approval to continue
+- **SUSPENDED** - The step/task is blocked because an upstream step is paused
 
-When a step or task is paused, the workflow **does not cascade upward**. Instead, it **suspends downstream** dependencies:
+When a step is paused, the workflow **does not cascade upward**. Instead, it **suspends downstream** dependencies:
 - Subsequent steps in the same task become SUSPENDED
 - Dependant tasks and their steps become SUSPENDED
-- The workflow and task can continue running other independent branches
+- The workflow and task continue running other independent branches
 
 ## Status Types
 
@@ -37,69 +36,32 @@ When a step or task is paused, the workflow **does not cascade upward**. Instead
 | PENDING | Ready to run, waiting for dependencies |
 | RUNNING | Currently executing |
 | PAUSED | Explicitly paused, awaiting approval |
-| SUSPENDED | Blocked by upstream PAUSED entity |
+| SUSPENDED | Blocked by upstream PAUSED step |
 | COMPLETED | Successfully finished |
 | FAILED | Execution failed |
 | CANCELLED | Manually cancelled |
 
-## Pause Reason Hierarchy
-
-Pause reasons are stored at the **workflow** and **step** levels only:
-
-| Entity   | Has `paused_at` | Has `pause_reason` |
-|----------|-----------------|---------------------|
-| Workflow | Yes             | Yes                 |
-| Task     | Yes             | No                  |
-| Step     | Yes             | Yes                 |
-
-This design keeps the model lean while preserving the reason at the points where it matters most:
-- The **workflow** level for high-level monitoring and notifications
-- The **step** level for debugging and understanding exactly which job detected the issue
-
 ## Basic Usage
 
-### Pausing
+### Pausing a Step
 
 ```php
-use AdamczykPiotr\DagWorkflows\Models\Workflow;
-
-$workflow = Workflow::find($id);
-
-// Pause the entire workflow
-$workflow->pause('Anomaly detected - awaiting manual review');
-
-// Pause a specific task
-$task = $workflow->tasks()->where('name', 'process_data')->first();
-$task->pause('Data validation required');
-
 // Pause a specific step
 $step = $task->steps()->where('order', 2)->first();
 $step->pause('Unusual pattern detected');
 ```
 
-### Resuming
+### Resuming a Step
 
 ```php
-// Resume from workflow level (resumes all paused tasks/steps)
-$workflow->resume();
-
-// Resume a specific task (resumes its paused steps)
-$task->resume();
-
-// Resume a specific step
+// Resume a paused step - marks it as COMPLETED and dispatches the next step
 $step->resume();
 ```
 
-### Cancelling
+### Cancelling a Step
 
 ```php
-// Cancel the entire workflow
-$workflow->cancel();
-
-// Cancel a specific task (also cancels dependent tasks)
-$task->cancel();
-
-// Cancel a specific step (also cancels subsequent steps and dependent tasks)
+// Cancel a step (also cancels subsequent steps and dependent tasks)
 $step->cancel();
 ```
 
@@ -255,9 +217,9 @@ $workflow = new Workflow(
 $model = $workflow->dispatch();
 ```
 
-### Handling Paused Workflows
+### Handling Paused Steps
 
-Create an event listener to notify administrators when a workflow pauses:
+Create an event listener to notify administrators when a step pauses:
 
 ```php
 <?php
@@ -268,17 +230,21 @@ use AdamczykPiotr\DagWorkflows\Events\WorkflowPaused;
 use App\Notifications\WorkflowNeedsReview;
 use Illuminate\Support\Facades\Notification;
 
-class NotifyOnWorkflowPause
+class NotifyOnStepPause
 {
     public function handle(WorkflowPaused $event): void
     {
+        $step = $event->step;
+        $task = $step->task;
+        $workflow = $task->workflow;
+        
         $admins = User::where('role', 'admin')->get();
 
         Notification::send($admins, new WorkflowNeedsReview(
-            workflowId: $event->workflow->id,
-            workflowName: $event->workflow->name,
-            taskName: $event->task?->name,
-            stepOrder: $event->step?->order,
+            workflowId: $workflow->id,
+            workflowName: $workflow->name,
+            taskName: $task->name,
+            stepOrder: $step->order,
             reason: $event->reason,
         ));
     }
@@ -289,11 +255,11 @@ Register the listener in your `EventServiceProvider`:
 
 ```php
 use AdamczykPiotr\DagWorkflows\Events\WorkflowPaused;
-use App\Listeners\NotifyOnWorkflowPause;
+use App\Listeners\NotifyOnStepPause;
 
 protected $listen = [
     WorkflowPaused::class => [
-        NotifyOnWorkflowPause::class,
+        NotifyOnStepPause::class,
     ],
 ];
 ```
@@ -308,7 +274,6 @@ Example controller for reviewing and managing paused steps:
 namespace App\Http\Controllers;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
-use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use Illuminate\Http\Request;
 
@@ -405,8 +370,6 @@ The package dispatches events when steps are paused, resumed, or cancelled:
 | `WorkflowResumed`  | When a step is resumed    |
 | `WorkflowCancelled`| When a step is cancelled  |
 
-**Note:** Events are only dispatched for step-level operations. Workflow and task level pause/resume/cancel do not dispatch events.
-
 ### Event Properties
 
 ```php
@@ -434,10 +397,16 @@ use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 
 $status = $step->status;
 
+$status->isActive();      // true if PENDING or RUNNING
 $status->isBlocked();     // true if PAUSED or SUSPENDED
 $status->canBePaused();   // true if PENDING or RUNNING
 $status->canBeResumed();  // true if PAUSED
 $status->isTerminal();    // true if COMPLETED, FAILED, or CANCELLED
+
+// Static methods for querying
+RunStatus::active();      // [PENDING, RUNNING]
+RunStatus::blocked();     // [PAUSED, SUSPENDED]
+RunStatus::nonTerminal(); // [PENDING, RUNNING, PAUSED, SUSPENDED]
 ```
 
 ## Best Practices
@@ -480,13 +449,7 @@ WorkflowTaskStep::query()
     });
 ```
 
-### 4. Use Appropriate Granularity
-
-- Pause at the **step level** when only one job in a task needs review
-- Pause at the **task level** when all steps in a task should wait
-- Pause at the **workflow level** when the entire pipeline should halt
-
-### 5. Handle Resume Gracefully
+### 4. Handle Resume Gracefully
 
 Jobs should be idempotent and handle being re-run after a pause:
 

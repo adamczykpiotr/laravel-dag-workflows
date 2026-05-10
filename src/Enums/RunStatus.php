@@ -17,11 +17,8 @@ enum RunStatus: string
     case CANCELLED = 'CANCELLED';
 
 
-    public function isTerminal(): bool {
-        return match ($this) {
-            self::COMPLETED, self::FAILED, self::CANCELLED => true,
-            self::PENDING, self::RUNNING, self::PAUSED, self::SUSPENDED => false,
-        };
+    public function isActive(): bool {
+        return $this === self::PENDING || $this === self::RUNNING;
     }
 
 
@@ -30,15 +27,44 @@ enum RunStatus: string
     }
 
 
-    public function canBePaused(): bool {
+    public function isTerminal(): bool {
         return match ($this) {
-            self::PENDING, self::RUNNING => true,
+            self::COMPLETED, self::FAILED, self::CANCELLED => true,
             default => false,
         };
     }
 
 
+    public function canBePaused(): bool {
+        return $this->isActive();
+    }
+
+
     public function canBeResumed(): bool {
         return $this === self::PAUSED;
+    }
+
+
+    /**
+     * @return array<int, self>
+     */
+    public static function active(): array {
+        return [self::PENDING, self::RUNNING];
+    }
+
+
+    /**
+     * @return array<int, self>
+     */
+    public static function blocked(): array {
+        return [self::PAUSED, self::SUSPENDED];
+    }
+
+
+    /**
+     * @return array<int, self>
+     */
+    public static function nonTerminal(): array {
+        return [self::PENDING, self::RUNNING, self::PAUSED, self::SUSPENDED];
     }
 }

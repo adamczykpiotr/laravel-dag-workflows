@@ -16,11 +16,6 @@ use Throwable;
 
 class WorkflowDispatcher {
 
-    private const array ACTIVE_STATUSES = [RunStatus::PENDING, RunStatus::RUNNING];
-    private const array BLOCKED_STATUSES = [RunStatus::PAUSED, RunStatus::SUSPENDED];
-    private const array NON_TERMINAL_STATUSES = [RunStatus::PENDING, RunStatus::RUNNING, RunStatus::PAUSED, RunStatus::SUSPENDED];
-
-
     /**
      * @param Workflow $workflow
      * @param bool $force
@@ -180,184 +175,9 @@ class WorkflowDispatcher {
 
     /*
     |--------------------------------------------------------------------------
-    | Pause Operations
+    | Step Pause Operations
     |--------------------------------------------------------------------------
     */
-
-
-    /**
-     * @param Workflow $workflow
-     * @param string|null $reason
-     * @return bool
-     * @throws Throwable
-     */
-    public function pauseWorkflow(Workflow $workflow, ?string $reason = null): bool {
-        if ($workflow->status->canBePaused() === false) {
-            return false;
-        }
-
-        DB::transaction(function() use ($workflow, $reason) {
-            $workflow->status = RunStatus::PAUSED;
-            $workflow->paused_at = now();
-            $workflow->pause_reason = $reason;
-            $workflow->save();
-
-            $workflow->tasks()
-                ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, self::ACTIVE_STATUSES)
-                ->update($this->buildPauseUpdate());
-
-            WorkflowTaskStep::query()
-                ->where(WorkflowTaskStep::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
-                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, self::ACTIVE_STATUSES)
-                ->update($this->buildStepPauseUpdate($reason));
-        });
-
-        return true;
-    }
-
-
-    /**
-     * @param Workflow $workflow
-     * @return bool
-     * @throws Throwable
-     */
-    public function resumeWorkflow(Workflow $workflow): bool {
-        if ($workflow->status->canBeResumed() === false) {
-            return false;
-        }
-
-        DB::transaction(function() use ($workflow) {
-            $workflow->status = RunStatus::RUNNING;
-            $workflow->paused_at = null;
-            $workflow->pause_reason = null;
-            $workflow->save();
-
-            $workflow->tasks()
-                ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PAUSED)
-                ->update($this->buildResumeUpdate());
-
-            WorkflowTaskStep::query()
-                ->where(WorkflowTaskStep::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
-                ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::PAUSED)
-                ->update($this->buildStepResumeUpdate());
-        });
-
-        return $this->dispatchWorkflow($workflow, force: true);
-    }
-
-
-    /**
-     * @param Workflow $workflow
-     * @return bool
-     * @throws Throwable
-     */
-    public function cancelWorkflow(Workflow $workflow): bool {
-        if ($workflow->status->isTerminal()) {
-            return false;
-        }
-
-        DB::transaction(function() use ($workflow) {
-            $workflow->status = RunStatus::CANCELLED;
-            $workflow->failed_at = now();
-            $workflow->paused_at = null;
-            $workflow->pause_reason = null;
-            $workflow->save();
-
-            $workflow->tasks()
-                ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, self::NON_TERMINAL_STATUSES)
-                ->update($this->buildCancelUpdate());
-
-            WorkflowTaskStep::query()
-                ->where(WorkflowTaskStep::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
-                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, self::NON_TERMINAL_STATUSES)
-                ->update($this->buildStepCancelUpdate());
-        });
-
-        return true;
-    }
-
-
-    /**
-     * @param WorkflowTask $task
-     * @param string|null $reason
-     * @return bool
-     * @throws Throwable
-     */
-    public function pauseTask(WorkflowTask $task, ?string $reason = null): bool {
-        if ($task->status->canBePaused() === false) {
-            return false;
-        }
-
-        DB::transaction(function() use ($task, $reason) {
-            $task->status = RunStatus::PAUSED;
-            $task->paused_at = now();
-            $task->save();
-
-            $task->steps()
-                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, self::ACTIVE_STATUSES)
-                ->update($this->buildStepPauseUpdate($reason));
-
-            $this->suspendDependantTasks($task);
-        });
-
-        return true;
-    }
-
-
-    /**
-     * @param WorkflowTask $task
-     * @return bool
-     * @throws Throwable
-     */
-    public function resumeTask(WorkflowTask $task): bool {
-        if ($task->status->canBeResumed() === false) {
-            return false;
-        }
-
-        DB::transaction(function() use ($task) {
-            $task->status = RunStatus::PENDING;
-            $task->paused_at = null;
-            $task->save();
-
-            $task->steps()
-                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, self::BLOCKED_STATUSES)
-                ->update($this->buildStepResumeUpdate());
-
-            $this->unsuspendDependantTasks($task);
-        });
-
-        return $this->dispatchTask($task, force: true);
-    }
-
-
-    /**
-     * @param WorkflowTask $task
-     * @return bool
-     * @throws Throwable
-     */
-    public function cancelTask(WorkflowTask $task): bool {
-        if ($task->status->isTerminal()) {
-            return false;
-        }
-
-        $workflow = $task->workflow;
-
-        DB::transaction(function() use ($task, $workflow) {
-            $task->status = RunStatus::CANCELLED;
-            $task->failed_at = now();
-            $task->paused_at = null;
-            $task->save();
-
-            $task->steps()
-                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, self::NON_TERMINAL_STATUSES)
-                ->update($this->buildStepCancelUpdate());
-
-            $this->cancelDependantTasks($task);
-            $this->finalizeWorkflowStatus($workflow);
-        });
-
-        return true;
-    }
 
 
     /**
@@ -450,7 +270,7 @@ class WorkflowDispatcher {
 
             $task->steps()
                 ->where(WorkflowTaskStep::ATTRIBUTE_ORDER, '>', $step->order)
-                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, self::NON_TERMINAL_STATUSES)
+                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::nonTerminal())
                 ->update($this->buildStepCancelUpdate());
 
             $task->status = RunStatus::CANCELLED;
@@ -608,7 +428,7 @@ class WorkflowDispatcher {
             return;
         }
 
-        $statuses = $includePaused ? self::NON_TERMINAL_STATUSES : self::ACTIVE_STATUSES;
+        $statuses = $includePaused ? RunStatus::nonTerminal() : RunStatus::active();
         $update = $includePaused ? $this->buildCancelUpdate() : [
             WorkflowTask::ATTRIBUTE_STATUS => RunStatus::CANCELLED,
             WorkflowTask::ATTRIBUTE_FAILED_AT => now(),
@@ -670,7 +490,7 @@ class WorkflowDispatcher {
      */
     protected function finalizeWorkflowStatus(Workflow $workflow): void {
         $hasActiveTask = $workflow->tasks()
-            ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, self::NON_TERMINAL_STATUSES)
+            ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::nonTerminal())
             ->exists();
 
         if ($hasActiveTask) {
@@ -696,92 +516,6 @@ class WorkflowDispatcher {
 
 
     /**
-     * @param Workflow $workflow
-     * @param string|null $reason
-     * @return void
-     */
-    protected function pauseWorkflowIfNoActiveTasks(Workflow $workflow, ?string $reason): void {
-        if ($workflow->status !== RunStatus::RUNNING) {
-            return;
-        }
-
-        $hasActiveTask = $workflow->tasks()
-            ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, self::ACTIVE_STATUSES)
-            ->exists();
-
-        if ($hasActiveTask === false) {
-            $workflow->status = RunStatus::PAUSED;
-            $workflow->paused_at = now();
-            $workflow->pause_reason = $reason;
-            $workflow->save();
-        }
-    }
-
-
-    /**
-     * @param WorkflowTask $task
-     * @return void
-     */
-    protected function pauseTaskIfNoActiveSteps(WorkflowTask $task): void {
-        if ($task->status !== RunStatus::RUNNING) {
-            return;
-        }
-
-        $hasActiveStep = $task->steps()
-            ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, self::ACTIVE_STATUSES)
-            ->exists();
-
-        if ($hasActiveStep === false) {
-            $task->status = RunStatus::PAUSED;
-            $task->paused_at = now();
-            $task->save();
-        }
-    }
-
-
-    /**
-     * @param Workflow $workflow
-     * @return void
-     */
-    protected function resumeWorkflowIfPaused(Workflow $workflow): void {
-        if ($workflow->status !== RunStatus::PAUSED) {
-            return;
-        }
-
-        $workflow->status = RunStatus::RUNNING;
-        $workflow->paused_at = null;
-        $workflow->pause_reason = null;
-        $workflow->save();
-    }
-
-
-    /**
-     * @param WorkflowTask $task
-     * @return void
-     */
-    protected function resumeTaskIfPaused(WorkflowTask $task): void {
-        if ($task->status !== RunStatus::PAUSED) {
-            return;
-        }
-
-        $task->status = RunStatus::RUNNING;
-        $task->paused_at = null;
-        $task->save();
-    }
-
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function buildPauseUpdate(): array {
-        return [
-            WorkflowTask::ATTRIBUTE_STATUS => RunStatus::PAUSED,
-            WorkflowTask::ATTRIBUTE_PAUSED_AT => now(),
-        ];
-    }
-
-
-    /**
      * @param string|null $reason
      * @return array<string, mixed>
      */
@@ -790,17 +524,6 @@ class WorkflowDispatcher {
             WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::PAUSED,
             WorkflowTaskStep::ATTRIBUTE_PAUSED_AT => now(),
             WorkflowTaskStep::ATTRIBUTE_PAUSE_REASON => $reason,
-        ];
-    }
-
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function buildResumeUpdate(): array {
-        return [
-            WorkflowTask::ATTRIBUTE_STATUS => RunStatus::PENDING,
-            WorkflowTask::ATTRIBUTE_PAUSED_AT => null,
         ];
     }
 

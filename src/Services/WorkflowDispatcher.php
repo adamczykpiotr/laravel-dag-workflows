@@ -212,7 +212,7 @@ class WorkflowDispatcher {
                 ->update($this->buildStepPauseUpdate($reason));
         });
 
-        WorkflowPaused::dispatch($workflow, reason: $reason);
+        WorkflowPaused::dispatch($workflow, null, null, $reason);
 
         return true;
     }
@@ -308,7 +308,7 @@ class WorkflowDispatcher {
             $this->suspendDependantTasks($task);
         });
 
-        WorkflowPaused::dispatch($workflow, $task, reason: $reason);
+        WorkflowPaused::dispatch($workflow, $task, null, $reason);
 
         return true;
     }

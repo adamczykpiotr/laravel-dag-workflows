@@ -397,30 +397,32 @@ class WorkflowReviewController extends Controller
 
 ## Events
 
-The package dispatches events when workflows are paused, resumed, or cancelled:
+The package dispatches events when steps are paused, resumed, or cancelled:
 
-| Event              | When Dispatched                              |
-|--------------------|----------------------------------------------|
-| `WorkflowPaused`   | When a workflow, task, or step is paused     |
-| `WorkflowResumed`  | When a workflow, task, or step is resumed    |
-| `WorkflowCancelled`| When a workflow, task, or step is cancelled  |
+| Event              | When Dispatched           |
+|--------------------|---------------------------|
+| `WorkflowPaused`   | When a step is paused     |
+| `WorkflowResumed`  | When a step is resumed    |
+| `WorkflowCancelled`| When a step is cancelled  |
+
+**Note:** Events are only dispatched for step-level operations. Workflow and task level pause/resume/cancel do not dispatch events.
 
 ### Event Properties
 
 ```php
 // WorkflowPaused
-$event->step;    // The step that was paused (null for workflow/task-level pause)
+$event->step;    // The step that was paused
 $event->reason;  // The pause reason
 
 // WorkflowResumed
-$event->step;    // The step that was resumed (null for workflow/task-level resume)
+$event->step;    // The step that was resumed
 
 // WorkflowCancelled
-$event->step;    // The step that was cancelled (null for workflow/task-level cancel)
+$event->step;    // The step that was cancelled
 
 // Access task and workflow via step relationships
-$task = $event->step?->task;
-$workflow = $event->step?->task->workflow;
+$task = $event->step->task;
+$workflow = $event->step->task->workflow;
 ```
 
 ## Status Helpers

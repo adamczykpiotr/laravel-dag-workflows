@@ -1272,19 +1272,16 @@ describe('Model attributes', function() {
 */
 
 describe('Events', function() {
-    it('dispatches WorkflowPaused event when workflow is paused', function() {
+    it('does not dispatch event when workflow is paused', function() {
         Event::fake([WorkflowPaused::class]);
 
         $workflow = createWorkflow(RunStatus::RUNNING);
         $workflow->pause('Test reason');
 
-        Event::assertDispatched(WorkflowPaused::class, function ($event) {
-            return $event->step === null
-                && $event->reason === 'Test reason';
-        });
+        Event::assertNotDispatched(WorkflowPaused::class);
     });
 
-    it('dispatches WorkflowPaused event when task is paused', function() {
+    it('does not dispatch event when task is paused', function() {
         Event::fake([WorkflowPaused::class]);
 
         $workflow = createWorkflow(RunStatus::RUNNING);
@@ -1293,10 +1290,7 @@ describe('Events', function() {
 
         $task->pause('Task paused');
 
-        Event::assertDispatched(WorkflowPaused::class, function ($event) {
-            return $event->step === null
-                && $event->reason === 'Task paused';
-        });
+        Event::assertNotDispatched(WorkflowPaused::class);
     });
 
     it('dispatches WorkflowPaused event when step is paused', function() {
@@ -1316,7 +1310,7 @@ describe('Events', function() {
         });
     });
 
-    it('dispatches WorkflowResumed event when workflow is resumed', function() {
+    it('does not dispatch event when workflow is resumed', function() {
         Event::fake([WorkflowResumed::class]);
 
         $workflow = createWorkflow(RunStatus::PAUSED);
@@ -1325,12 +1319,10 @@ describe('Events', function() {
 
         $workflow->resume();
 
-        Event::assertDispatched(WorkflowResumed::class, function ($event) {
-            return $event->step === null;
-        });
+        Event::assertNotDispatched(WorkflowResumed::class);
     });
 
-    it('dispatches WorkflowResumed event when task is resumed', function() {
+    it('does not dispatch event when task is resumed', function() {
         Event::fake([WorkflowResumed::class]);
 
         $workflow = createWorkflow(RunStatus::RUNNING);
@@ -1339,9 +1331,7 @@ describe('Events', function() {
 
         $task->resume();
 
-        Event::assertDispatched(WorkflowResumed::class, function ($event) {
-            return $event->step === null;
-        });
+        Event::assertNotDispatched(WorkflowResumed::class);
     });
 
     it('dispatches WorkflowResumed event when step is resumed', function() {
@@ -1360,18 +1350,16 @@ describe('Events', function() {
         });
     });
 
-    it('dispatches WorkflowCancelled event when workflow is cancelled', function() {
+    it('does not dispatch event when workflow is cancelled', function() {
         Event::fake([WorkflowCancelled::class]);
 
         $workflow = createWorkflow(RunStatus::RUNNING);
         $workflow->cancel();
 
-        Event::assertDispatched(WorkflowCancelled::class, function ($event) {
-            return $event->step === null;
-        });
+        Event::assertNotDispatched(WorkflowCancelled::class);
     });
 
-    it('dispatches WorkflowCancelled event when task is cancelled', function() {
+    it('does not dispatch event when task is cancelled', function() {
         Event::fake([WorkflowCancelled::class]);
 
         $workflow = createWorkflow(RunStatus::RUNNING);
@@ -1380,9 +1368,7 @@ describe('Events', function() {
 
         $task->cancel();
 
-        Event::assertDispatched(WorkflowCancelled::class, function ($event) {
-            return $event->step === null;
-        });
+        Event::assertNotDispatched(WorkflowCancelled::class);
     });
 
     it('dispatches WorkflowCancelled event when step is cancelled', function() {

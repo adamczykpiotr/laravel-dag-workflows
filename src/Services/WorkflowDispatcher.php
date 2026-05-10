@@ -212,8 +212,6 @@ class WorkflowDispatcher {
                 ->update($this->buildStepPauseUpdate($reason));
         });
 
-        WorkflowPaused::dispatch(null, $reason);
-
         return true;
     }
 
@@ -243,8 +241,6 @@ class WorkflowDispatcher {
                 ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::PAUSED)
                 ->update($this->buildStepResumeUpdate());
         });
-
-        WorkflowResumed::dispatch();
 
         return $this->dispatchWorkflow($workflow, force: true);
     }
@@ -277,8 +273,6 @@ class WorkflowDispatcher {
                 ->update($this->buildStepCancelUpdate());
         });
 
-        WorkflowCancelled::dispatch();
-
         return true;
     }
 
@@ -294,8 +288,6 @@ class WorkflowDispatcher {
             return false;
         }
 
-        $workflow = $task->workflow;
-
         DB::transaction(function() use ($task, $reason) {
             $task->status = RunStatus::PAUSED;
             $task->paused_at = now();
@@ -307,8 +299,6 @@ class WorkflowDispatcher {
 
             $this->suspendDependantTasks($task);
         });
-
-        WorkflowPaused::dispatch(null, $reason);
 
         return true;
     }
@@ -324,8 +314,6 @@ class WorkflowDispatcher {
             return false;
         }
 
-        $workflow = $task->workflow;
-
         DB::transaction(function() use ($task) {
             $task->status = RunStatus::PENDING;
             $task->paused_at = null;
@@ -337,8 +325,6 @@ class WorkflowDispatcher {
 
             $this->unsuspendDependantTasks($task);
         });
-
-        WorkflowResumed::dispatch();
 
         return $this->dispatchTask($task, force: true);
     }
@@ -369,8 +355,6 @@ class WorkflowDispatcher {
             $this->cancelDependantTasks($task);
             $this->finalizeWorkflowStatus($workflow);
         });
-
-        WorkflowCancelled::dispatch();
 
         return true;
     }

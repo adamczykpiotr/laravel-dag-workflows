@@ -25,16 +25,6 @@ enum RunStatus: string
     }
 
 
-    public function isPaused(): bool {
-        return $this === self::PAUSED;
-    }
-
-
-    public function isSuspended(): bool {
-        return $this === self::SUSPENDED;
-    }
-
-
     public function isBlocked(): bool {
         return $this === self::PAUSED || $this === self::SUSPENDED;
     }

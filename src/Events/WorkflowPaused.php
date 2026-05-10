@@ -12,7 +12,7 @@ class WorkflowPaused
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(
-        public readonly ?WorkflowTaskStep $step = null,
+        public readonly WorkflowTaskStep $step,
         public readonly ?string $reason = null,
     ) {
     }

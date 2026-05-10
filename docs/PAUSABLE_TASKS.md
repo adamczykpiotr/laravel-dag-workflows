@@ -434,8 +434,6 @@ use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 
 $status = $step->status;
 
-$status->isPaused();      // true if PAUSED
-$status->isSuspended();   // true if SUSPENDED
 $status->isBlocked();     // true if PAUSED or SUSPENDED
 $status->canBePaused();   // true if PENDING or RUNNING
 $status->canBeResumed();  // true if PAUSED

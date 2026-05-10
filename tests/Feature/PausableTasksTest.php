@@ -78,35 +78,9 @@ describe('RunStatus enum', function() {
         expect(RunStatus::SUSPENDED->isTerminal())->toBeFalse();
     });
 
-    it('PAUSED returns true for isPaused', function() {
-        expect(RunStatus::PAUSED->isPaused())->toBeTrue();
-    });
-
-    it('SUSPENDED returns true for isSuspended', function() {
-        expect(RunStatus::SUSPENDED->isSuspended())->toBeTrue();
-    });
-
     it('PAUSED and SUSPENDED return true for isBlocked', function() {
         expect(RunStatus::PAUSED->isBlocked())->toBeTrue();
         expect(RunStatus::SUSPENDED->isBlocked())->toBeTrue();
-    });
-
-    it('other statuses return false for isPaused', function() {
-        expect(RunStatus::PENDING->isPaused())->toBeFalse();
-        expect(RunStatus::RUNNING->isPaused())->toBeFalse();
-        expect(RunStatus::COMPLETED->isPaused())->toBeFalse();
-        expect(RunStatus::FAILED->isPaused())->toBeFalse();
-        expect(RunStatus::CANCELLED->isPaused())->toBeFalse();
-        expect(RunStatus::SUSPENDED->isPaused())->toBeFalse();
-    });
-
-    it('other statuses return false for isSuspended', function() {
-        expect(RunStatus::PENDING->isSuspended())->toBeFalse();
-        expect(RunStatus::RUNNING->isSuspended())->toBeFalse();
-        expect(RunStatus::PAUSED->isSuspended())->toBeFalse();
-        expect(RunStatus::COMPLETED->isSuspended())->toBeFalse();
-        expect(RunStatus::FAILED->isSuspended())->toBeFalse();
-        expect(RunStatus::CANCELLED->isSuspended())->toBeFalse();
     });
 
     it('PENDING and RUNNING can be paused', function() {

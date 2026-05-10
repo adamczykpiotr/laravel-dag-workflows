@@ -193,9 +193,7 @@ describe('Workflow pause', function() {
         $task3->refresh();
 
         expect($task1->status)->toBe(RunStatus::PAUSED);
-        expect($task1->pause_reason)->toBe('Test pause');
         expect($task2->status)->toBe(RunStatus::PAUSED);
-        expect($task2->pause_reason)->toBe('Test pause');
         expect($task3->status)->toBe(RunStatus::COMPLETED);
     });
 
@@ -285,7 +283,6 @@ describe('Workflow resume', function() {
         $workflow = createWorkflow(RunStatus::PAUSED);
         $task = createTask($workflow, RunStatus::PAUSED);
         $task->paused_at = now();
-        $task->pause_reason = 'Paused';
         $task->save();
 
         $step = createStep($task, RunStatus::PAUSED);
@@ -295,7 +292,6 @@ describe('Workflow resume', function() {
         $task->refresh();
         expect($task->status)->toBe(RunStatus::PENDING);
         expect($task->paused_at)->toBeNull();
-        expect($task->pause_reason)->toBeNull();
     });
 
     it('resumes paused steps to pending state', function() {
@@ -441,7 +437,7 @@ describe('Task pause', function() {
         expect($result)->toBeTrue();
         $task->refresh();
         expect($task->status)->toBe(RunStatus::PAUSED);
-        expect($task->pause_reason)->toBe('Task anomaly');
+        expect($task->paused_at)->not->toBeNull();
     });
 
     it('can pause a running task', function() {
@@ -593,7 +589,6 @@ describe('Task cancel', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task = createTask($workflow, RunStatus::PAUSED);
         $task->paused_at = now();
-        $task->pause_reason = 'Test';
         $task->save();
 
         $result = $task->cancel();
@@ -602,7 +597,6 @@ describe('Task cancel', function() {
         $task->refresh();
         expect($task->status)->toBe(RunStatus::CANCELLED);
         expect($task->paused_at)->toBeNull();
-        expect($task->pause_reason)->toBeNull();
     });
 
     it('cannot cancel a completed task', function() {
@@ -732,7 +726,7 @@ describe('Step pause', function() {
 
         $task->refresh();
         expect($task->status)->toBe(RunStatus::PAUSED);
-        expect($task->pause_reason)->toBe('Pausing last active step');
+        expect($task->paused_at)->not->toBeNull();
     });
 
     it('does not pause task if other steps are still active', function() {
@@ -1009,7 +1003,7 @@ describe('Complex scenarios', function() {
         expect($workflow->refresh()->status)->toBe(RunStatus::CANCELLED);
     });
 
-    it('preserves pause reason through hierarchy', function() {
+    it('preserves pause reason through hierarchy (step and workflow only)', function() {
         $workflow = createWorkflow(RunStatus::RUNNING);
         $task = createTask($workflow, RunStatus::RUNNING);
         $step1 = createStep($task, RunStatus::COMPLETED, 1);
@@ -1018,7 +1012,7 @@ describe('Complex scenarios', function() {
         $step2->pause('Data validation required');
 
         expect($step2->refresh()->pause_reason)->toBe('Data validation required');
-        expect($task->refresh()->pause_reason)->toBe('Data validation required');
+        expect($task->refresh()->status)->toBe(RunStatus::PAUSED);
         expect($workflow->refresh()->pause_reason)->toBe('Data validation required');
     });
 
@@ -1030,7 +1024,6 @@ describe('Complex scenarios', function() {
 
         $task = createTask($workflow, RunStatus::PAUSED);
         $task->paused_at = now();
-        $task->pause_reason = 'Paused task';
         $task->save();
 
         $step = createStep($task, RunStatus::PAUSED);
@@ -1047,7 +1040,6 @@ describe('Complex scenarios', function() {
         expect($workflow->paused_at)->toBeNull();
         expect($workflow->pause_reason)->toBeNull();
         expect($task->paused_at)->toBeNull();
-        expect($task->pause_reason)->toBeNull();
         expect($step->paused_at)->toBeNull();
         expect($step->pause_reason)->toBeNull();
     });
@@ -1208,7 +1200,6 @@ describe('Model attributes', function() {
 
     it('task has pause attributes defined', function() {
         expect(WorkflowTask::ATTRIBUTE_PAUSED_AT)->toBe('paused_at');
-        expect(WorkflowTask::ATTRIBUTE_PAUSE_REASON)->toBe('pause_reason');
     });
 
     it('step has pause attributes defined', function() {

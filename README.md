@@ -123,123 +123,24 @@ Workflows, tasks, and steps can be paused for manual intervention. This is usefu
 - User approval is needed before continuing
 - External validation is required
 
-### Pausing
-
 ```php
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 
 $workflow = Workflow::find($id);
 
-// Pause the entire workflow (pauses all active tasks and steps)
+// Pause the entire workflow
 $workflow->pause('Anomaly detected - awaiting manual review');
 
-// Or pause a specific task
-$task = $workflow->tasks()->where('name', 'process_data')->first();
-$task->pause('Data validation required');
-
-// Or pause a specific step
-$step = $task->steps()->where('order', 2)->first();
-$step->pause('Unusual pattern detected');
-```
-
-### Resuming
-
-```php
-// Resume from workflow level
+// Resume when ready
 $workflow->resume();
 
-// Or resume a specific task
-$task->resume();
-
-// Or resume a specific step
-$step->resume();
-```
-
-### Cancelling
-
-```php
-// Cancel the entire workflow
+// Or cancel if not recoverable
 $workflow->cancel();
-
-// Cancel a specific task (also cancels dependent tasks)
-$task->cancel();
-
-// Cancel a specific step (also cancels subsequent steps and dependent tasks)
-$step->cancel();
 ```
 
-### Status Helpers
+The package dispatches events (`WorkflowPaused`, `WorkflowResumed`, `WorkflowCancelled`) that you can listen to for notifications and integrations.
 
-```php
-use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
-
-// Check if paused
-if ($workflow->status === RunStatus::PAUSED) {
-    // Handle paused state
-}
-
-// Or use helper methods
-$workflow->status->isPaused();    // true if PAUSED
-$workflow->status->canBePaused(); // true if PENDING or RUNNING
-$workflow->status->canBeResumed(); // true if PAUSED
-$workflow->status->isTerminal();  // true if COMPLETED, FAILED, or CANCELLED
-```
-
-## Events
-
-The package dispatches events when workflows are paused, resumed, or cancelled. Use these to notify users, trigger alerts, or integrate with external systems.
-
-### Available Events
-
-- `WorkflowPaused` - Dispatched when a workflow, task, or step is paused
-- `WorkflowResumed` - Dispatched when a workflow, task, or step is resumed  
-- `WorkflowCancelled` - Dispatched when a workflow, task, or step is cancelled
-
-### Listening to Events
-
-```php
-// In your EventServiceProvider
-use AdamczykPiotr\DagWorkflows\Events\WorkflowPaused;
-use AdamczykPiotr\DagWorkflows\Events\WorkflowResumed;
-use AdamczykPiotr\DagWorkflows\Events\WorkflowCancelled;
-
-protected $listen = [
-    WorkflowPaused::class => [
-        SendPauseNotification::class,
-    ],
-    WorkflowResumed::class => [
-        LogWorkflowResumed::class,
-    ],
-    WorkflowCancelled::class => [
-        CleanupCancelledWorkflow::class,
-    ],
-];
-```
-
-### Event Properties
-
-All events provide access to the affected entities:
-
-```php
-use AdamczykPiotr\DagWorkflows\Events\WorkflowPaused;
-
-class SendPauseNotification
-{
-    public function handle(WorkflowPaused $event): void
-    {
-        $workflow = $event->workflow;  // Always available
-        $task = $event->task;          // Available if task was paused
-        $step = $event->step;          // Available if step was paused
-        $reason = $event->reason;      // The pause reason (WorkflowPaused only)
-
-        // Send notification, create alert, etc.
-        Notification::send(
-            $admins,
-            new WorkflowNeedsAttention($workflow->id, $reason)
-        );
-    }
-}
-```
+For comprehensive documentation including job examples, event handling, and best practices, see **[docs/PAUSABLE_TASKS.md](docs/PAUSABLE_TASKS.md)**.
 
 ## Limiting `ResolvableTask` items per environment
 

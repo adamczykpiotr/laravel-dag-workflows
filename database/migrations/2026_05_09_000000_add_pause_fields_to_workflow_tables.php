@@ -17,7 +17,6 @@ return new class extends Migration {
 
         Schema::table('workflow_tasks', function(Blueprint $table) {
             $table->timestamp('paused_at')->nullable()->after('failed_at');
-            $table->string('pause_reason', 1024)->nullable()->after('paused_at');
         });
 
         Schema::table('workflow_task_steps', function(Blueprint $table) {
@@ -36,7 +35,7 @@ return new class extends Migration {
         });
 
         Schema::table('workflow_tasks', function(Blueprint $table) {
-            $table->dropColumn(['paused_at', 'pause_reason']);
+            $table->dropColumn(['paused_at']);
         });
 
         Schema::table('workflow_task_steps', function(Blueprint $table) {

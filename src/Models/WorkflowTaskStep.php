@@ -21,6 +21,8 @@ use Throwable;
  * @property RunStatus $status
  * @property Carbon|null $started_at
  * @property Carbon|null $failed_at
+ * @property Carbon|null $paused_at
+ * @property string|null $pause_reason
  * @property Carbon|null $completed_at
  * @property string $payload
  * @property int|null $progress
@@ -43,6 +45,8 @@ class WorkflowTaskStep extends BaseModel {
     const string ATTRIBUTE_STATUS = 'status';
     const string ATTRIBUTE_STARTED_AT = 'started_at';
     const string ATTRIBUTE_FAILED_AT = 'failed_at';
+    const string ATTRIBUTE_PAUSED_AT = 'paused_at';
+    const string ATTRIBUTE_PAUSE_REASON = 'pause_reason';
     const string ATTRIBUTE_COMPLETED_AT = 'completed_at';
     const string ATTRIBUTE_PAYLOAD = 'payload';
     const string ATTRIBUTE_PROGRESS = 'progress';
@@ -62,6 +66,7 @@ class WorkflowTaskStep extends BaseModel {
             self::ATTRIBUTE_STATUS => RunStatus::class,
             self::ATTRIBUTE_STARTED_AT => 'datetime',
             self::ATTRIBUTE_FAILED_AT => 'datetime',
+            self::ATTRIBUTE_PAUSED_AT => 'datetime',
             self::ATTRIBUTE_COMPLETED_AT => 'datetime',
         ];
     }
@@ -116,5 +121,36 @@ class WorkflowTaskStep extends BaseModel {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         $dispatcher->retryStep($this);
+    }
+
+
+    /**
+     * @param string|null $reason
+     * @return bool
+     */
+    public function pause(?string $reason = null): bool {
+        /** @var WorkflowDispatcher $dispatcher */
+        $dispatcher = resolve(WorkflowDispatcher::class);
+        return $dispatcher->pauseStep($this, $reason);
+    }
+
+
+    /**
+     * @return bool
+     */
+    public function resume(): bool {
+        /** @var WorkflowDispatcher $dispatcher */
+        $dispatcher = resolve(WorkflowDispatcher::class);
+        return $dispatcher->resumeStep($this);
+    }
+
+
+    /**
+     * @return bool
+     */
+    public function cancel(): bool {
+        /** @var WorkflowDispatcher $dispatcher */
+        $dispatcher = resolve(WorkflowDispatcher::class);
+        return $dispatcher->cancelStep($this);
     }
 }

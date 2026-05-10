@@ -38,6 +38,11 @@ class DagWorkflowTrackerJobMiddleware {
 
         // Already processed or canceled due to other failures
         if ($step->status !== RunStatus::PENDING) {
+            // If paused, release job back to queue for later
+            if ($step->status === RunStatus::PAUSED) {
+                $job->release(60); // @phpstan-ignore-line
+                return null;
+            }
             $job->fail(); // @phpstan-ignore-line
             return $next($job);
         }

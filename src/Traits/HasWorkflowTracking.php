@@ -2,6 +2,7 @@
 
 namespace AdamczykPiotr\DagWorkflows\Traits;
 
+use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskEarlyCompletionException;
 use AdamczykPiotr\DagWorkflows\Middlewares\DagWorkflowTrackerJobMiddleware;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 
@@ -42,6 +43,23 @@ trait HasWorkflowTracking {
         }
 
         $this->workflowTaskStep->save();
+    }
+
+
+    /**
+     * Complete the whole task early: the current step is marked COMPLETED, all
+     * remaining steps of the task are marked SKIPPED (they never run), and the
+     * task completes as if every step had run — dependant tasks are dispatched
+     * and the workflow status is finalized as usual.
+     *
+     * Call from within a tracked job's handle() when the remaining steps are
+     * known to be unnecessary (e.g. the downloaded source file is unchanged).
+     * This method never returns.
+     *
+     * @throws WorkflowTaskEarlyCompletionException
+     */
+    public function completeTaskEarly(?string $reason = null): never {
+        throw new WorkflowTaskEarlyCompletionException($reason ?? '');
     }
 
 

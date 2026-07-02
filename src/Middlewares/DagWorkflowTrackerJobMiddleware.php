@@ -3,6 +3,7 @@
 namespace AdamczykPiotr\DagWorkflows\Middlewares;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
+use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskEarlyCompletionException;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
@@ -53,6 +54,11 @@ class DagWorkflowTrackerJobMiddleware {
             $result = $next($job);
             $this->completeWorkflowTaskStep($step);
             return $result;
+        } catch (WorkflowTaskEarlyCompletionException) {
+            // Deliberate short-circuit, not a failure: complete this step, skip the
+            // task's remaining steps, and let the task/workflow complete as usual.
+            $this->dispatcher->completeTaskEarly($step);
+            return null;
         } catch (Throwable $t) {
             $this->dispatcher->failStep($step);
 

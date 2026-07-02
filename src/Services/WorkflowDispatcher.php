@@ -141,6 +141,41 @@ class WorkflowDispatcher {
 
 
     /**
+     * Complete the step's task early: the current step becomes COMPLETED, all
+     * remaining non-terminal steps become SKIPPED (they never run), and the task
+     * completes as usual — dependant tasks are dispatched and the workflow status
+     * is finalized. Triggered by a job calling
+     * {@see \AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking::completeTaskEarly()}.
+     *
+     * @param WorkflowTaskStep $step
+     * @return bool
+     * @throws Throwable
+     */
+    public function completeTaskEarly(WorkflowTaskStep $step): bool {
+        DB::transaction(function() use ($step) {
+            $step->status = RunStatus::COMPLETED;
+            $step->completed_at = now();
+            $step->failed_at = null;
+            if ($step->progress !== null) {
+                $step->progress = 100;
+            }
+            $step->save();
+
+            WorkflowTaskStep::query()
+                ->where(WorkflowTaskStep::ATTRIBUTE_TASK_ID, $step->task_id)
+                ->where(WorkflowTaskStep::ATTRIBUTE_ORDER, '>', $step->order)
+                ->whereIn(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::nonTerminal())
+                ->update([
+                    WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::SKIPPED,
+                    WorkflowTaskStep::ATTRIBUTE_COMPLETED_AT => now(),
+                ]);
+        });
+
+        return $this->completeTaskAndDispatchDependants($step->task);
+    }
+
+
+    /**
      * @param WorkflowTaskStep $step
      * @return void
      * @throws Throwable

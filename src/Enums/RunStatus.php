@@ -16,6 +16,13 @@ enum RunStatus: string
     case FAILED = 'FAILED';
     case CANCELLED = 'CANCELLED';
 
+    /**
+     * Step never ran because its task was completed early
+     * ({@see \AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking::completeTaskEarly()}).
+     * Terminal and non-failing.
+     */
+    case SKIPPED = 'SKIPPED';
+
 
     public function isActive(): bool {
         return $this === self::PENDING || $this === self::RUNNING;
@@ -29,7 +36,7 @@ enum RunStatus: string
 
     public function isTerminal(): bool {
         return match ($this) {
-            self::COMPLETED, self::FAILED, self::CANCELLED => true,
+            self::COMPLETED, self::FAILED, self::CANCELLED, self::SKIPPED => true,
             default => false,
         };
     }

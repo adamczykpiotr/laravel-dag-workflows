@@ -142,6 +142,34 @@ The package dispatches events (`WorkflowPaused`, `WorkflowResumed`, `WorkflowCan
 
 For comprehensive documentation including job examples, event handling, and best practices, see **[docs/PAUSABLE_TASKS.md](docs/PAUSABLE_TASKS.md)**.
 
+## Early Task Completion
+
+A job can complete its whole task early when the remaining steps are known to be
+unnecessary — for example when a freshly downloaded source file is byte-identical
+to the one already processed:
+
+```php
+use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
+
+class ScrapeDatasetJob implements ShouldQueue {
+    use HasWorkflowTracking;
+
+    public function handle(): void {
+        $file = $this->download();
+
+        if ($this->isUnchanged($file)) {
+            $this->completeTaskEarly('source file unchanged'); // never returns
+        }
+
+        // ... continue as usual
+    }
+}
+```
+
+The current step is marked `COMPLETED`, all remaining steps of the task are marked
+`SKIPPED` (a terminal, non-failing status), and the task completes as if every step
+had run — dependant tasks are dispatched and the workflow status is finalized as usual.
+
 ## Limiting `ResolvableTask` items per environment
 
 `config/dag-workflows.php` points at a middleware applied to the items before tasks are materialised. The default is `PassthroughMiddleware` although for testing purposes there's also handy implementation of `TakeFirstMiddleware`.

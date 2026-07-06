@@ -33,7 +33,7 @@ class ParserUntrackedJob implements ShouldQueue {
 class WorkflowDefinitionParserTest extends TestCase {
 
     private function parser(): WorkflowDefinitionParser {
-        return new WorkflowDefinitionParser();
+        return resolve(WorkflowDefinitionParser::class);
     }
 
 

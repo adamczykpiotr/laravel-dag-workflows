@@ -345,19 +345,7 @@ class WorkflowDispatcher {
 
             $this->dispatchDependantTasks($task);
 
-            $workflow = $task->workflow;
-            $allTasksCompleted = $workflow->tasks()
-                ->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
-                ->doesntExist();
-
-            if ($allTasksCompleted === true) {
-                $workflow->status = RunStatus::COMPLETED;
-                $workflow->completed_at = now();
-                $workflow->failed_at = null;
-                $workflow->paused_at = null;
-                $workflow->pause_reason = null;
-                $workflow->save();
-            }
+            $this->finalizeWorkflowStatus($task->workflow);
         });
 
         return true;
@@ -520,10 +508,18 @@ class WorkflowDispatcher {
 
 
     /**
+     * Drive the workflow to its correct status based on the state of its tasks.
+     *
+     * While any task is still non-terminal the workflow is left untouched (it
+     * stays RUNNING). Once every task is terminal the workflow is finalized:
+     * COMPLETED when all tasks completed, FAILED when at least one task failed,
+     * otherwise CANCELLED. This is what prevents a workflow from being stranded
+     * in RUNNING after e.g. retrying one of several failed branches.
+     *
      * @param Workflow $workflow
      * @return void
      */
-    protected function finalizeWorkflowStatus(Workflow $workflow): void {
+    public function finalizeWorkflowStatus(Workflow $workflow): void {
         $hasActiveTask = $workflow->tasks()
             ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::nonTerminal())
             ->exists();
@@ -539,11 +535,23 @@ class WorkflowDispatcher {
         if ($allCompleted) {
             $workflow->status = RunStatus::COMPLETED;
             $workflow->completed_at = now();
-        } else {
-            $workflow->status = RunStatus::CANCELLED;
-            $workflow->failed_at = now();
+            $workflow->failed_at = null;
+            $workflow->paused_at = null;
+            $workflow->pause_reason = null;
+            $workflow->save();
+            return;
         }
 
+        $hasFailedTask = $workflow->tasks()
+            ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::FAILED)
+            ->exists();
+
+        $workflow->status = $hasFailedTask ? RunStatus::FAILED : RunStatus::CANCELLED;
+        $workflow->completed_at = null;
+        // Preserve the moment the workflow first entered its failed/cancelled
+        // state (failStep may already have stamped it); retryStep clears it back
+        // to null, so a genuine re-failure after a retry stamps a fresh time.
+        $workflow->failed_at = $workflow->failed_at ?? now();
         $workflow->paused_at = null;
         $workflow->pause_reason = null;
         $workflow->save();

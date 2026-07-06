@@ -4,11 +4,9 @@ namespace AdamczykPiotr\DagWorkflows\Middlewares;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskEarlyCompletionException;
-use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use Closure;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -150,18 +148,11 @@ class DagWorkflowTrackerJobMiddleware {
 
             $this->dispatcher->dispatchDependantTasks($task);
 
-            // Check if workflow has succeeded
-            $workflow = $task->workflow;
-            $allTasksCompleted = $workflow->tasks()
-                ->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
-                ->doesntExist();
-
-            if ($allTasksCompleted === true) {
-                $workflow->status = RunStatus::COMPLETED;
-                $workflow->completed_at = now();
-                $workflow->failed_at = null;
-                $workflow->save();
-            }
+            // Drive the workflow to its correct status: COMPLETED once every task
+            // has completed, or a terminal FAILED/CANCELLED if work has run out
+            // while a sibling task is still failed/cancelled (otherwise the
+            // workflow would be stranded in RUNNING).
+            $this->dispatcher->finalizeWorkflowStatus($task->workflow);
         });
     }
 }

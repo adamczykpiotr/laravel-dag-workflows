@@ -13,19 +13,11 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Queue;
 
 /*
-|--------------------------------------------------------------------------
-| End-to-end status propagation harness (shared)
-|--------------------------------------------------------------------------
-|
-| Builds a real workflow graph (workflow → tasks → steps, with dependencies)
-| and drives it through the actual job middleware + dispatcher, draining the
-| faked queue so every dispatched follow-up step/task runs exactly as it
-| would on a real worker.
-|
-| Per-step behaviour is controlled through StatusFlowJob::$behaviours, keyed
-| by step id: 'ok' (default), 'fail' or 'early'.
-|
-*/
+ * Shared harness: builds a real workflow graph and drives it through the actual
+ * job middleware + dispatcher, draining the faked queue like a real worker.
+ * Per-step behaviour comes from StatusFlowJob::$behaviours (step id => 'ok'
+ * (default) | 'fail' | 'early').
+ */
 
 class StatusFlowJob implements ShouldQueue {
     use HasWorkflowTracking, InteractsWithQueue, Queueable;
@@ -127,8 +119,7 @@ trait InteractsWithStatusFlow {
                 try {
                     $middleware->handle($job, fn(StatusFlowJob $j) => $j->handle());
                 } catch (Throwable) {
-                    // A real queue worker records the failure; failStep() has already
-                    // run inside the middleware, so we just keep draining.
+                    // failStep() already ran inside the middleware; keep draining.
                 }
             }
         } while ($ran);

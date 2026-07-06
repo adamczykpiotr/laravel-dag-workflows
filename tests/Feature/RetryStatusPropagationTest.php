@@ -167,14 +167,12 @@ class RetryStatusPropagationTest extends TestCase {
         $this->runWorkflow($workflow);
         $this->assertSame(RunStatus::FAILED, $workflow->refresh()->status);
 
-        // Retry only branch a.
         StatusFlowJob::$behaviours[$steps['a'][1]->id] = 'ok';
         $this->freshStep($steps['a'][1])->retry();
         $this->drainWorkflowQueue();
 
-        // Branch b is still FAILED and there is no active work left, so the
-        // workflow must be driven to a terminal FAILED status, never left
-        // stranded in RUNNING.
+        // b is still FAILED with no active work left, so the workflow must be
+        // driven to FAILED, never stranded in RUNNING.
         $this->assertSame(RunStatus::COMPLETED, $tasks['a']->refresh()->status);
         $this->assertSame(RunStatus::FAILED, $tasks['b']->refresh()->status);
         $this->assertSame(RunStatus::FAILED, $workflow->refresh()->status);

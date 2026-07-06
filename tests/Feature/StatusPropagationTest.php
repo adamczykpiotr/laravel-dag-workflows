@@ -166,7 +166,6 @@ class StatusPropagationTest extends TestCase {
 
         $this->runWorkflow($workflow);
 
-        // Every task is terminal, so the workflow must be terminal too.
         foreach ($tasks as $task) {
             $this->assertTrue($task->refresh()->status->isTerminal());
         }

@@ -148,10 +148,6 @@ class DagWorkflowTrackerJobMiddleware {
 
             $this->dispatcher->dispatchDependantTasks($task);
 
-            // Drive the workflow to its correct status: COMPLETED once every task
-            // has completed, or a terminal FAILED/CANCELLED if work has run out
-            // while a sibling task is still failed/cancelled (otherwise the
-            // workflow would be stranded in RUNNING).
             $this->dispatcher->finalizeWorkflowStatus($task->workflow);
         });
     }

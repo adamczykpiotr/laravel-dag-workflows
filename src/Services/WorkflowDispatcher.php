@@ -508,13 +508,8 @@ class WorkflowDispatcher {
 
 
     /**
-     * Drive the workflow to its correct status based on the state of its tasks.
-     *
-     * While any task is still non-terminal the workflow is left untouched (it
-     * stays RUNNING). Once every task is terminal the workflow is finalized:
-     * COMPLETED when all tasks completed, FAILED when at least one task failed,
-     * otherwise CANCELLED. This is what prevents a workflow from being stranded
-     * in RUNNING after e.g. retrying one of several failed branches.
+     * Finalize the workflow status once no task is still running: COMPLETED if
+     * all tasks completed, FAILED if any task failed, otherwise CANCELLED.
      *
      * @param Workflow $workflow
      * @return void
@@ -548,9 +543,6 @@ class WorkflowDispatcher {
 
         $workflow->status = $hasFailedTask ? RunStatus::FAILED : RunStatus::CANCELLED;
         $workflow->completed_at = null;
-        // Preserve the moment the workflow first entered its failed/cancelled
-        // state (failStep may already have stamped it); retryStep clears it back
-        // to null, so a genuine re-failure after a retry stamps a fresh time.
         $workflow->failed_at = $workflow->failed_at ?? now();
         $workflow->paused_at = null;
         $workflow->pause_reason = null;

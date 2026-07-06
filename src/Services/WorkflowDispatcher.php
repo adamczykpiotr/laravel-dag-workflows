@@ -345,19 +345,7 @@ class WorkflowDispatcher {
 
             $this->dispatchDependantTasks($task);
 
-            $workflow = $task->workflow;
-            $allTasksCompleted = $workflow->tasks()
-                ->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
-                ->doesntExist();
-
-            if ($allTasksCompleted === true) {
-                $workflow->status = RunStatus::COMPLETED;
-                $workflow->completed_at = now();
-                $workflow->failed_at = null;
-                $workflow->paused_at = null;
-                $workflow->pause_reason = null;
-                $workflow->save();
-            }
+            $this->finalizeWorkflowStatus($task->workflow);
         });
 
         return true;
@@ -520,10 +508,13 @@ class WorkflowDispatcher {
 
 
     /**
+     * Finalize the workflow status once no task is still running: COMPLETED if
+     * all tasks completed, FAILED if any task failed, otherwise CANCELLED.
+     *
      * @param Workflow $workflow
      * @return void
      */
-    protected function finalizeWorkflowStatus(Workflow $workflow): void {
+    public function finalizeWorkflowStatus(Workflow $workflow): void {
         $hasActiveTask = $workflow->tasks()
             ->whereIn(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::nonTerminal())
             ->exists();
@@ -539,11 +530,20 @@ class WorkflowDispatcher {
         if ($allCompleted) {
             $workflow->status = RunStatus::COMPLETED;
             $workflow->completed_at = now();
-        } else {
-            $workflow->status = RunStatus::CANCELLED;
-            $workflow->failed_at = now();
+            $workflow->failed_at = null;
+            $workflow->paused_at = null;
+            $workflow->pause_reason = null;
+            $workflow->save();
+            return;
         }
 
+        $hasFailedTask = $workflow->tasks()
+            ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::FAILED)
+            ->exists();
+
+        $workflow->status = $hasFailedTask ? RunStatus::FAILED : RunStatus::CANCELLED;
+        $workflow->completed_at = null;
+        $workflow->failed_at = $workflow->failed_at ?? now();
         $workflow->paused_at = null;
         $workflow->pause_reason = null;
         $workflow->save();

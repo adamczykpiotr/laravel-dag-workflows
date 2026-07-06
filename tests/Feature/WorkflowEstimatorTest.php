@@ -295,6 +295,6 @@ class WorkflowEstimatorTest extends TestCase {
 
 
     private function estimateFor(Workflow $workflow) {
-        return (new WorkflowEstimator())->build($workflow->load('tasks.steps'));
+        return resolve(WorkflowEstimator::class)->build($workflow->load('tasks.steps'));
     }
 }

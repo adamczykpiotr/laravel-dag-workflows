@@ -3,46 +3,60 @@
 use AdamczykPiotr\DagWorkflows\Middlewares\ResolvableItems\PassthroughMiddleware;
 use AdamczykPiotr\DagWorkflows\Middlewares\ResolvableItems\TakeFirstMiddleware;
 use AdamczykPiotr\DagWorkflows\Middlewares\ResolvableItems\WorkflowResolvableItemsMiddleware;
+use AdamczykPiotr\DagWorkflows\Tests\TestCase;
 use Illuminate\Support\Collection;
 
-it('PassthroughMiddleware returns the items unchanged', function() {
-    $items = ['a', 'b', 'c'];
+class ResolvableItemsMiddlewareTest extends TestCase {
 
-    expect((new PassthroughMiddleware())->handle($items))->toBe($items);
-});
+    public function test_passthrough_middleware_returns_the_items_unchanged(): void {
+        $items = ['a', 'b', 'c'];
 
-it('PassthroughMiddleware accepts any iterable', function() {
-    $generator = (function() { yield 'a'; yield 'b'; })();
+        $this->assertSame($items, (new PassthroughMiddleware())->handle($items));
+    }
 
-    $out = (new PassthroughMiddleware())->handle($generator);
 
-    expect(iterator_to_array($out))->toBe(['a', 'b']);
-});
+    public function test_passthrough_middleware_accepts_any_iterable(): void {
+        $generator = (function() { yield 'a'; yield 'b'; })();
 
-it('TakeFirstMiddleware trims to the configured count', function() {
-    $items = ['a', 'b', 'c', 'd'];
+        $out = (new PassthroughMiddleware())->handle($generator);
 
-    expect((new TakeFirstMiddleware(count: 2))->handle($items))
-        ->toBeInstanceOf(Collection::class)
-        ->toArray()->toBe(['a', 'b']);
-});
+        $this->assertSame(['a', 'b'], iterator_to_array($out));
+    }
 
-it('TakeFirstMiddleware handles count larger than item set', function() {
-    expect((new TakeFirstMiddleware(count: 10))->handle(['a', 'b']))
-        ->toArray()->toBe(['a', 'b']);
-});
 
-it('TakeFirstMiddleware handles an empty iterable', function() {
-    expect((new TakeFirstMiddleware(count: 3))->handle([]))
-        ->toArray()->toBe([]);
-});
+    public function test_take_first_middleware_trims_to_the_configured_count(): void {
+        $items = ['a', 'b', 'c', 'd'];
 
-it('TakeFirstMiddleware defaults to 1 item', function() {
-    expect((new TakeFirstMiddleware())->handle(['a', 'b', 'c']))
-        ->toArray()->toBe(['a']);
-});
+        $result = (new TakeFirstMiddleware(count: 2))->handle($items);
 
-it('both shipped implementations satisfy the interface', function() {
-    expect(new PassthroughMiddleware())->toBeInstanceOf(WorkflowResolvableItemsMiddleware::class)
-        ->and(new TakeFirstMiddleware())->toBeInstanceOf(WorkflowResolvableItemsMiddleware::class);
-});
+        $this->assertInstanceOf(Collection::class, $result);
+        $this->assertSame(['a', 'b'], $result->toArray());
+    }
+
+
+    public function test_take_first_middleware_handles_count_larger_than_item_set(): void {
+        $result = (new TakeFirstMiddleware(count: 10))->handle(['a', 'b']);
+
+        $this->assertSame(['a', 'b'], $result->toArray());
+    }
+
+
+    public function test_take_first_middleware_handles_an_empty_iterable(): void {
+        $result = (new TakeFirstMiddleware(count: 3))->handle([]);
+
+        $this->assertSame([], $result->toArray());
+    }
+
+
+    public function test_take_first_middleware_defaults_to_1_item(): void {
+        $result = (new TakeFirstMiddleware())->handle(['a', 'b', 'c']);
+
+        $this->assertSame(['a'], $result->toArray());
+    }
+
+
+    public function test_both_shipped_implementations_satisfy_the_interface(): void {
+        $this->assertInstanceOf(WorkflowResolvableItemsMiddleware::class, new PassthroughMiddleware());
+        $this->assertInstanceOf(WorkflowResolvableItemsMiddleware::class, new TakeFirstMiddleware());
+    }
+}

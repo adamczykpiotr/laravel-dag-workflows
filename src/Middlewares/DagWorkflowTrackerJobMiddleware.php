@@ -35,15 +35,17 @@ class DagWorkflowTrackerJobMiddleware {
 
         $step = $job->workflowTaskStep;
 
-        // Already processed or canceled due to other failures
+        // Paused: release the job to be retried once resumed.
+        if ($step->status === RunStatus::PAUSED) {
+            $job->release(60); // @phpstan-ignore-line
+            return null;
+        }
+
+        // Any other non-pending step is a stale/duplicate delivery (e.g. an
+        // orphaned reservation redelivered after retry_after). Drop it:
+        // re-running would duplicate the work and failing would be spurious.
         if ($step->status !== RunStatus::PENDING) {
-            // If paused, release job back to queue for later
-            if ($step->status === RunStatus::PAUSED) {
-                $job->release(60); // @phpstan-ignore-line
-                return null;
-            }
-            $job->fail(); // @phpstan-ignore-line
-            return $next($job);
+            return null;
         }
 
         $this->beginWorkflowTaskStep($step);

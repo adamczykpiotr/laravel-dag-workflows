@@ -4,38 +4,35 @@ namespace AdamczykPiotr\DagWorkflows\Http\Resources;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
+use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
+use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
 
 /**
  * Lightweight workflow representation: status counts and completion percentages
- * instead of the full tasks/steps tree. Built from two aggregate queries, so it
- * stays cheap for workflows with thousands of tasks.
+ * instead of the full tasks/steps tree.
  *
  * @mixin Workflow
  */
 class WorkflowSummaryResource extends JsonResource {
 
     /**
-     * @param Workflow $workflow
-     * @param Collection<string, int> $taskStatuses status value => count
-     * @param Collection<string, int> $stepStatuses status value => count
-     */
-    public function __construct(
-        Workflow $workflow,
-        private readonly Collection $taskStatuses,
-        private readonly Collection $stepStatuses,
-    ) {
-        parent::__construct($workflow);
-    }
-
-
-    /**
      * @param Request $request
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array {
+        /** @var Workflow $workflow */
+        $workflow = $this->resource;
+
+        $taskStatuses = $workflow->tasks
+            ->countBy(fn(WorkflowTask $task): string => $task->status->value);
+
+        /** @var Collection<int, WorkflowTaskStep> $steps */
+        $steps = $workflow->tasks->flatMap(fn(WorkflowTask $task) => $task->steps);
+        $stepStatuses = $steps->countBy(fn(WorkflowTaskStep $step): string => $step->status->value);
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -51,11 +48,12 @@ class WorkflowSummaryResource extends JsonResource {
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,
 
-            'taskStatuses' => $this->taskStatuses,
-            'stepStatuses' => $this->stepStatuses,
+            'taskStatuses' => $taskStatuses,
+            'stepStatuses' => $stepStatuses,
 
-            'taskCompletionPercentage' => $this->completionPercentage($this->taskStatuses),
-            'stepCompletionPercentage' => $this->completionPercentage($this->stepStatuses),
+            'taskCompletionPercentage' => $this->completionPercentage($taskStatuses),
+            'stepCompletionPercentage' => $this->completionPercentage($stepStatuses),
+            'stepProgressPercentage' => $this->progressPercentage($steps),
         ];
     }
 
@@ -88,5 +86,26 @@ class WorkflowSummaryResource extends JsonResource {
             + ($statuses->get(RunStatus::SKIPPED->value) ?? 0);
 
         return round($done / $total * 100, 2);
+    }
+
+
+    /**
+     * Average effective progress across every step: done steps weigh 100, running
+     * steps weigh their self-reported progress, everything else weighs 0.
+     *
+     * @param Collection<int, WorkflowTaskStep> $steps
+     * @return float
+     */
+    private function progressPercentage(Collection $steps): float {
+        if ($steps->isEmpty()) {
+            return 0.0;
+        }
+
+        $effective = $steps->reduce(fn(int $carry, WorkflowTaskStep $step): int => $carry + match (true) {
+            $step->status === RunStatus::COMPLETED, $step->status === RunStatus::SKIPPED => 100,
+            default => $step->progress ?? 0,
+        }, 0);
+
+        return round($effective / $steps->count(), 2);
     }
 }

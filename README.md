@@ -172,8 +172,8 @@ had run — dependant tasks are dispatched and the workflow status is finalized 
 
 ## Workflow endpoint formats
 
-`WorkflowController::show` defaults to a lightweight summary — two aggregate
-queries instead of loading the whole tasks/steps tree:
+`WorkflowController::show` defaults to a lightweight summary —
+no dependency wiring, no estimator:
 
 ```json
 {
@@ -184,12 +184,15 @@ queries instead of loading the whole tasks/steps tree:
     "taskStatuses": { "COMPLETED": 7, "RUNNING": 2, "PENDING": 105 },
     "stepStatuses": { "COMPLETED": 21, "RUNNING": 2, "PENDING": 211 },
     "taskCompletionPercentage": 6.14,
-    "stepCompletionPercentage": 8.97
+    "stepCompletionPercentage": 8.97,
+    "stepProgressPercentage": 9.42
 }
 ```
 
 `SKIPPED` counts as done in the percentages (it is the terminal, non-failing
-status of steps bypassed by an early task completion). Append `?format=full`
+status of steps bypassed by an early task completion), and
+`stepProgressPercentage` additionally credits running steps with their
+self-reported `progress`. Append `?format=full`
 for the previous behaviour: the complete tasks/steps tree with dependencies
 and timing estimates.
 

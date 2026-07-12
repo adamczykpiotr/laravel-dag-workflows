@@ -113,6 +113,29 @@ class WorkflowSummaryFormatTest extends TestCase {
     }
 
 
+    public function test_step_progress_percentage_credits_running_steps_fractionally(): void {
+        [$workflow, $tasks, $steps] = $this->buildWorkflow([
+            'a' => ['steps' => 1],
+            'b' => ['steps' => 1],
+            'c' => ['steps' => 1],
+            'd' => ['steps' => 1],
+        ]);
+
+        $steps['a'][1]->status = RunStatus::COMPLETED;
+        $steps['a'][1]->save();
+        $steps['b'][1]->status = RunStatus::RUNNING;
+        $steps['b'][1]->progress = 50;
+        $steps['b'][1]->save();
+        $steps['c'][1]->status = RunStatus::RUNNING;  // no self-reported progress
+        $steps['c'][1]->save();
+
+        $payload = $this->payload($workflow);
+
+        // (100 + 50 + 0 + 0) / 4
+        $this->assertSame(37.5, (float) $payload['stepProgressPercentage']);
+    }
+
+
     public function test_format_full_returns_the_task_tree(): void {
         $payload = $this->payload($this->makeSampleWorkflow(), format: 'full');
 

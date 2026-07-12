@@ -109,13 +109,10 @@ class WorkflowRepository {
             WorkflowTask::insert($chunk->toArray());
         }
 
-        // get([...]) + mapWithKeys instead of pluck(): selects the same two columns
-        // but keeps the key/value types larastan can verify — pluck() with column-name
-        // strings degrades to Collection<(int|string), mixed>.
+        /** @var Collection<string, int> $mapping */
         $mapping = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
-            ->get([WorkflowTask::ATTRIBUTE_ID, WorkflowTask::ATTRIBUTE_NAME])
-            ->mapWithKeys(fn(WorkflowTask $task) => [$task->name => $task->id]);
+            ->pluck(WorkflowTask::ATTRIBUTE_ID, WorkflowTask::ATTRIBUTE_NAME);
 
         $steps = $taskDtos->map(function(TaskDto $taskDto) use ($mapping, $workflow) {
             $taskId = $mapping->get($taskDto->name);

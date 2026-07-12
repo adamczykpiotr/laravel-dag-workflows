@@ -20,6 +20,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property int $id
  * @property int $workflow_id
  * @property string $name
+ * @property array<int, string>|null $dynamic_dependencies
  * @property RunStatus $status
  * @property Carbon|null $started_at
  * @property Carbon|null $failed_at
@@ -47,6 +48,7 @@ class WorkflowTask extends BaseModel {
     const string ATTRIBUTE_ID = 'id';
     const string ATTRIBUTE_WORKFLOW_ID = 'workflow_id';
     const string ATTRIBUTE_NAME = 'name';
+    const string ATTRIBUTE_DYNAMIC_DEPENDENCIES = 'dynamic_dependencies';
     const string ATTRIBUTE_STATUS = 'status';
     const string ATTRIBUTE_STARTED_AT = 'started_at';
     const string ATTRIBUTE_FAILED_AT = 'failed_at';
@@ -73,6 +75,7 @@ class WorkflowTask extends BaseModel {
     public function casts(): array {
         return [
             self::ATTRIBUTE_STATUS => RunStatus::class,
+            self::ATTRIBUTE_DYNAMIC_DEPENDENCIES => 'array',
             self::ATTRIBUTE_STARTED_AT => 'datetime',
             self::ATTRIBUTE_FAILED_AT => 'datetime',
             self::ATTRIBUTE_PAUSED_AT => 'datetime',

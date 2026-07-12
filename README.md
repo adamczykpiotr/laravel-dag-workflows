@@ -170,6 +170,33 @@ The current step is marked `COMPLETED`, all remaining steps of the task are mark
 `SKIPPED` (a terminal, non-failing status), and the task completes as if every step
 had run — dependant tasks are dispatched and the workflow status is finalized as usual.
 
+## Dynamic dependencies (waiting for a `ResolvableTask`'s spawned tasks)
+
+A `ResolvableTask` completes once its resolver has spawned the child tasks — depending
+on it by name therefore does NOT wait for the children. To gate a task on the base task
+AND on every task it spawns at runtime, suffix the dependency with `:*`:
+
+```php
+new ResolvableTask(
+    name: 'Sync feeds',
+    items: fn() => $feeds,
+    jobs: fn(string $feed) => new SyncFeedJob($feed),
+),
+new Task(
+    name: 'Rebuild search index',
+    jobs: new RebuildSearchIndexJob(),
+    dependsOn: 'Sync feeds:*', // waits for "Sync feeds" and every "Sync feeds:<item>" task
+),
+```
+
+The base task must exist in the workflow definition. When the resolver spawns its
+children, they are wired as additional dependencies of every task that declared the
+dynamic dependency; if the resolver spawns nothing, the dependant runs right after
+the base task completes.
+
+`*` is reserved for this syntax — task names containing it are rejected with a
+`WorkflowTaskReservedCharacterException`.
+
 ## Limiting `ResolvableTask` items per environment
 
 `config/dag-workflows.php` points at a middleware applied to the items before tasks are materialised. The default is `PassthroughMiddleware` although for testing purposes there's also handy implementation of `TakeFirstMiddleware`.

@@ -12,16 +12,25 @@ use AdamczykPiotr\DagWorkflows\Dto\WorkflowDto;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskCircularDependencyException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskDuplicateNameException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskMissingTrackingTraitException;
+use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskReservedCharacterException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskUnresolvedDependencyException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskWithoutJobException;
 use AdamczykPiotr\DagWorkflows\Jobs\ResolvableTaskResolverJob;
 use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
 use Closure;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 use Laravel\SerializableClosure\SerializableClosure;
 
 class WorkflowDefinitionParser {
+
+    /**
+     * @param DynamicDependenciesService $dynamicDependencies
+     */
+    public function __construct(
+        protected DynamicDependenciesService $dynamicDependencies,
+    ) {
+    }
+
 
     /**
      * @param Workflow $definition
@@ -31,6 +40,7 @@ class WorkflowDefinitionParser {
      * @throws WorkflowTaskUnresolvedDependencyException
      * @throws WorkflowTaskCircularDependencyException
      * @throws WorkflowTaskDuplicateNameException
+     * @throws WorkflowTaskReservedCharacterException
      */
     public function parse(Workflow $definition): WorkflowDto {
         /** @var Collection<int, TaskDto> $tasks */
@@ -100,8 +110,11 @@ class WorkflowDefinitionParser {
      * @return TaskDto
      * @throws WorkflowTaskMissingTrackingTraitException
      * @throws WorkflowTaskWithoutJobException
+     * @throws WorkflowTaskReservedCharacterException
      */
     protected function parseTask(Task $definition): TaskDto {
+        $this->guardReservedCharacters($definition->name);
+
         $jobs = Collection::wrap($definition->jobs)
             ->filter(fn($job) => is_object($job))  // @phpstan-ignore-line
             ->values();
@@ -132,13 +145,16 @@ class WorkflowDefinitionParser {
     /**
      * @param ResolvableTask $definition
      * @return TaskDto
+     * @throws WorkflowTaskReservedCharacterException
      */
     private function parseResolvableTask(ResolvableTask $definition): TaskDto {
+        $this->guardReservedCharacters($definition->name);
+
         $dependsOn = Collection::wrap($definition->dependsOn)->values();
 
         $job = new ResolvableTaskResolverJob(
             name: $definition->name,
-            dependsOn: collect(...$dependsOn)->push($definition->name)->toArray(), // @phpstan-ignore-line
+            dependsOn: [...$dependsOn->all(), $definition->name],
             itemProvider: new SerializableClosure($definition->items), // @phpstan-ignore-line
             jobProvider: new SerializableClosure($definition->jobs), // @phpstan-ignore-line
         );
@@ -156,6 +172,23 @@ class WorkflowDefinitionParser {
             ]),
             dependsOn: $dependsOn
         );
+    }
+
+
+    /**
+     * "*" is reserved for the dynamic dependency syntax ("Task name*") and would
+     * make such dependency declarations ambiguous if allowed in task names.
+     *
+     * @param string $taskName
+     * @return void
+     * @throws WorkflowTaskReservedCharacterException
+     */
+    protected function guardReservedCharacters(string $taskName): void {
+        if (str_contains($taskName, DynamicDependenciesService::RESERVED_CHARACTER)) {
+            throw new WorkflowTaskReservedCharacterException(
+                "Task name {$taskName} contains the reserved character " . DynamicDependenciesService::RESERVED_CHARACTER . '.'
+            );
+        }
     }
 
 
@@ -188,7 +221,11 @@ class WorkflowDefinitionParser {
             $recursionStack->put($taskName, true);
 
             $dependencies = $namedTasks->get($taskName)->dependsOn ?? collect();
-            $dependencies->each(fn(string $dependency) => $checkForCycles($dependency));
+            $dependencies
+                ->flatMap(fn(string $dependency) => $this->dynamicDependencies->isDynamic($dependency)
+                    ? $namedTasks->keys()->filter(fn(string $name) => $this->dynamicDependencies->matches($dependency, $name, $taskName))
+                    : collect([$dependency]))
+                ->each(fn(string $dependency) => $checkForCycles($dependency));
 
             $recursionStack->pull($taskName);
             $visited->put($taskName, true);
@@ -218,16 +255,28 @@ class WorkflowDefinitionParser {
             );
         }
 
-        foreach ($tasks as $taskName => $task) {
+        foreach ($tasks as $task) {
             foreach ($task->dependsOn as $dependency) {
-                // Skip dynamic dependencies
-                if (Str::endsWith($dependency, ':')) {
+                // Dynamic dependencies ("Import: *") gate on every other task matching the
+                // prefix, including tasks spawned at runtime. At least one match must
+                // exist upfront — it is the anchor that keeps the dependant parked
+                // until runtime-spawned matches have been wired in.
+                if ($this->dynamicDependencies->isDynamic($dependency)) {
+                    $hasMatch = $namedTasks->keys()
+                        ->contains(fn(string $name) => $this->dynamicDependencies->matches($dependency, $name, $task->name));
+
+                    if ($hasMatch === false) {
+                        throw new WorkflowTaskUnresolvedDependencyException(
+                            "Task {$task->name} has a dynamic dependency {$dependency} matching no other task."
+                        );
+                    }
+
                     continue;
                 }
 
                 if ($namedTasks->has($dependency) === false) {
                     throw new WorkflowTaskUnresolvedDependencyException(
-                        "Task {$taskName} has an unresolved dependency on task {$dependency}."
+                        "Task {$task->name} has an unresolved dependency on task {$dependency}."
                     );
                 }
             }

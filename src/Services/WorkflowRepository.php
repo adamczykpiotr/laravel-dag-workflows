@@ -6,6 +6,7 @@ use AdamczykPiotr\DagWorkflows\Dto\TaskDto;
 use AdamczykPiotr\DagWorkflows\Dto\TaskStepDto;
 use AdamczykPiotr\DagWorkflows\Dto\WorkflowDto;
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
+use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskUnresolvedDependencyException;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
@@ -16,6 +17,15 @@ use Throwable;
 class WorkflowRepository {
 
     const int INSERT_CHUNK_SIZE = 5_000;
+
+
+    /**
+     * @param DynamicDependenciesService $dynamicDependencies
+     */
+    public function __construct(
+        protected DynamicDependenciesService $dynamicDependencies,
+    ) {
+    }
 
 
     /**
@@ -69,10 +79,23 @@ class WorkflowRepository {
      * @return void
      */
     protected function storeTasks(Workflow $workflow, Collection $taskDtos): void {
+        // Captured before the insert below so it only holds tasks stored in earlier
+        // calls (e.g. the initial definition) whose dynamic dependencies may match
+        // the tasks appended now.
+        $storedDynamicDependants = WorkflowTask::query()
+            ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
+            ->whereNotNull(WorkflowTask::ATTRIBUTE_DYNAMIC_DEPENDENCIES)
+            ->get([WorkflowTask::ATTRIBUTE_ID, WorkflowTask::ATTRIBUTE_NAME, WorkflowTask::ATTRIBUTE_DYNAMIC_DEPENDENCIES]);
+
         $tasks = $taskDtos->map(function(TaskDto $taskDto) use ($workflow) {
+            $dynamicDependencies = collect($taskDto->dependsOn)
+                ->filter(fn(string $dependencyName) => $this->dynamicDependencies->isDynamic($dependencyName))
+                ->values();
+
             return [
                 WorkflowTask::ATTRIBUTE_WORKFLOW_ID => $workflow->id,
                 WorkflowTask::ATTRIBUTE_NAME => $taskDto->name,
+                WorkflowTask::ATTRIBUTE_DYNAMIC_DEPENDENCIES => $dynamicDependencies->isEmpty() ? null : $dynamicDependencies->toJson(),
                 WorkflowTask::ATTRIBUTE_STATUS => RunStatus::PENDING,
                 WorkflowTask::ATTRIBUTE_STARTED_AT => null,
                 WorkflowTask::ATTRIBUTE_FAILED_AT => null,
@@ -86,6 +109,7 @@ class WorkflowRepository {
             WorkflowTask::insert($chunk->toArray());
         }
 
+        /** @var Collection<string, int> $mapping */
         $mapping = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
             ->pluck(WorkflowTask::ATTRIBUTE_ID, WorkflowTask::ATTRIBUTE_NAME);
@@ -119,9 +143,9 @@ class WorkflowRepository {
             $taskId = $mapping->get($taskDto->name);
 
             return collect($taskDto->dependsOn)
-                ->map(function(string $dependencyName) use ($mapping, $taskId) {
-                    $dependencyId = $mapping->get($dependencyName);
-
+                ->flatMap(fn(string $dependencyName) => $this->resolveDependencyIds($mapping, $dependencyName, $taskDto->name))
+                ->unique()
+                ->map(function(int $dependencyId) use ($taskId) {
                     return [
                         WorkflowTask::PIVOT_COLUMN_TASK_ID => $taskId,
                         WorkflowTask::PIVOT_COLUMN_DEPENDANT_TASK_ID => $dependencyId,
@@ -129,8 +153,72 @@ class WorkflowRepository {
                 });
         })->flatten(1);
 
+        $dependencies = $dependencies->merge(
+            $this->resolveStoredDynamicDependants($storedDynamicDependants, $taskDtos, $mapping)
+        );
+
         foreach ($dependencies->chunk(self::INSERT_CHUNK_SIZE) as $chunk) {
             DB::table(WorkflowTask::PIVOT_DEPENDENCIES_TABLE)->insert($chunk->toArray());
         }
+    }
+
+
+    /**
+     * Task IDs a dependsOn entry gates on within the current workflow. A static
+     * dependency resolves to its named task; a dynamic one ("Import: *") resolves
+     * to every already-stored task matching the prefix, except the declarer.
+     *
+     * @param Collection<string, int> $mapping
+     * @param string $dependencyName
+     * @param string $declaringTaskName
+     * @return Collection<int, int>
+     */
+    protected function resolveDependencyIds(Collection $mapping, string $dependencyName, string $declaringTaskName): Collection {
+        if ($this->dynamicDependencies->isDynamic($dependencyName) === false) {
+            $dependencyId = $mapping->get($dependencyName);
+
+            if ($dependencyId === null) {
+                throw new WorkflowTaskUnresolvedDependencyException(
+                    "Dependency on task {$dependencyName} cannot be resolved within the stored workflow."
+                );
+            }
+
+            return collect([$dependencyId]);
+        }
+
+        return $mapping
+            ->filter(fn(int $taskId, string $taskName) => $this->dynamicDependencies->matches($dependencyName, $taskName, $declaringTaskName))
+            ->values();
+    }
+
+
+    /**
+     * Pivot rows wiring previously stored dynamic dependants to the tasks appended
+     * in the current call (e.g. tasks spawned by a ResolvableTask at runtime).
+     *
+     * @param Collection<int, WorkflowTask> $storedDynamicDependants
+     * @param Collection<int, TaskDto> $taskDtos
+     * @param Collection<string, int> $mapping
+     * @return Collection<int, array{task_id: int, dependant_task_id: int}>
+     */
+    protected function resolveStoredDynamicDependants(
+        Collection $storedDynamicDependants,
+        Collection $taskDtos,
+        Collection $mapping
+    ): Collection {
+        $appendedIds = $mapping->only($taskDtos->map(fn(TaskDto $taskDto) => $taskDto->name));
+
+        return $storedDynamicDependants->flatMap(function(WorkflowTask $dependant) use ($appendedIds) {
+            return collect($dependant->dynamic_dependencies)
+                ->flatMap(fn(string $wildcard) => $appendedIds->filter(fn(int $taskId, string $taskName) => $this->dynamicDependencies->matches($wildcard, $taskName, $dependant->name)))
+                ->unique()
+                ->values()
+                ->map(function(int $dependencyId) use ($dependant) {
+                    return [
+                        WorkflowTask::PIVOT_COLUMN_TASK_ID => $dependant->id,
+                        WorkflowTask::PIVOT_COLUMN_DEPENDANT_TASK_ID => $dependencyId,
+                    ];
+                });
+        });
     }
 }

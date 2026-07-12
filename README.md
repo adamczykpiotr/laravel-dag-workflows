@@ -170,6 +170,35 @@ The current step is marked `COMPLETED`, all remaining steps of the task are mark
 `SKIPPED` (a terminal, non-failing status), and the task completes as if every step
 had run — dependant tasks are dispatched and the workflow status is finalized as usual.
 
+## Dynamic dependencies (waiting for a `ResolvableTask`'s spawned tasks)
+
+A `ResolvableTask` completes once its resolver has spawned the child tasks — depending
+on it by name therefore does NOT wait for the children. A dependency ending with `*`
+is a prefix glob: it gates the task on every OTHER task whose name starts with the
+prefix, including tasks that only come into existence at runtime:
+
+```php
+new Task(name: 'Import: Customers', jobs: new ImportCustomersJob()),
+new ResolvableTask(
+    name: 'Import: Orders',
+    items: fn() => $regions,
+    jobs: fn(string $region) => new ImportOrdersJob($region),
+),
+new Task(
+    name: 'Import: Summary',
+    jobs: new BuildImportSummaryJob(),
+    dependsOn: 'Import: *', // waits for Import: Customers, Import: Orders and every Import: Orders:<region> task
+),
+```
+
+The declaring task never matches its own wildcard, so the aggregate may live in the
+namespace it waits for. At least one other task must match the glob at definition
+time — that anchor keeps the dependant parked until runtime-spawned matches (which
+are wired in while their resolver is still running) have been attached.
+
+`*` is reserved for this syntax — task names containing it are rejected with a
+`WorkflowTaskReservedCharacterException`.
+
 ## Limiting `ResolvableTask` items per environment
 
 `config/dag-workflows.php` points at a middleware applied to the items before tasks are materialised. The default is `PassthroughMiddleware` although for testing purposes there's also handy implementation of `TakeFirstMiddleware`.

@@ -44,11 +44,18 @@ class DagWorkflowTrackerJobMiddleware {
         // Any other non-pending step is a stale/duplicate delivery (e.g. an
         // orphaned reservation redelivered after retry_after). Drop it:
         // re-running would duplicate the work and failing would be spurious.
-        if ($step->status !== RunStatus::PENDING) {
+        // The claim below is atomic (UPDATE ... WHERE status = PENDING), so two
+        // workers holding duplicate deliveries of the same step cannot both run
+        // the handler — only the one winning the row proceeds.
+        if ($this->beginWorkflowTaskStep($step) === false) {
+            // A redelivery of a step whose task already completed means a worker
+            // died in the window between committing the completion and pushing the
+            // dependant jobs. Re-firing the dispatch is idempotent (pending-only
+            // + atomic claim), so use the redelivery to heal the stranded window.
+            $this->redispatchDependantsOfCompletedTask($step);
+
             return null;
         }
-
-        $this->beginWorkflowTaskStep($step);
 
         try {
             $result = $next($job);
@@ -71,22 +78,63 @@ class DagWorkflowTrackerJobMiddleware {
     /**
      * @param WorkflowTaskStep $step
      * @return void
-     * @throws Throwable
      */
-    protected function beginWorkflowTaskStep(WorkflowTaskStep $step): void {
-        $step->status = RunStatus::RUNNING;
-        $step->started_at = now();
-        $step->failed_at = null;
-        $step->completed_at = null;
+    protected function redispatchDependantsOfCompletedTask(WorkflowTaskStep $step): void {
+        $step->refresh();
 
-        if ($step->order > 1) {
-            $step->save();
+        if ($step->status !== RunStatus::COMPLETED) {
             return;
         }
 
-        DB::transaction(function() use ($step) {
-            $step->save();
+        $task = $step->task;
 
+        if ($task->status !== RunStatus::COMPLETED) {
+            return;
+        }
+
+        $this->dispatcher->dispatchDependantTasks($task);
+        $this->dispatcher->finalizeWorkflowStatus($task->workflow);
+    }
+
+
+    /**
+     * Atomically claim the step (PENDING -> RUNNING). Returns false when another
+     * delivery of the same step already claimed or processed it.
+     *
+     * @param WorkflowTaskStep $step
+     * @return bool
+     * @throws Throwable
+     */
+    protected function beginWorkflowTaskStep(WorkflowTaskStep $step): bool {
+        $startedAt = now();
+
+        $claimed = WorkflowTaskStep::query()
+            ->whereKey($step->id)
+            ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::PENDING)
+            ->update([
+                WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::RUNNING,
+                WorkflowTaskStep::ATTRIBUTE_STARTED_AT => $startedAt,
+                WorkflowTaskStep::ATTRIBUTE_FAILED_AT => null,
+                WorkflowTaskStep::ATTRIBUTE_COMPLETED_AT => null,
+            ]);
+
+        if ($claimed === 0) {
+            return false;
+        }
+
+        // Sync the in-memory model with the claim so later saves stay consistent.
+        $step->status = RunStatus::RUNNING;
+        $step->started_at = $startedAt;
+        $step->failed_at = null;
+        $step->completed_at = null;
+        $step->syncChanges();
+        $step->syncOriginal();
+
+        if ($step->order > 1) {
+            return true;
+        }
+
+        DB::transaction(function() use ($step) {
             $task = $step->task;
             $task->status = RunStatus::RUNNING;
             $task->started_at = now();
@@ -103,6 +151,8 @@ class DagWorkflowTrackerJobMiddleware {
                 $workflow->save();
             }
         });
+
+        return true;
     }
 
 
@@ -119,7 +169,7 @@ class DagWorkflowTrackerJobMiddleware {
             return;
         }
 
-        DB::transaction(function() use ($step) {
+        $completedTask = DB::transaction(function() use ($step) {
             $step->status = RunStatus::COMPLETED;
             $step->completed_at = now();
             $step->failed_at = null;
@@ -133,12 +183,12 @@ class DagWorkflowTrackerJobMiddleware {
             // Continuing steps - only if next step is PENDING (not SUSPENDED)
             if ($nextStep instanceof WorkflowTaskStep && $nextStep->status === RunStatus::PENDING) {
                 $this->dispatcher->dispatchStep($nextStep);
-                return;
+                return null;
             }
 
             // If next step exists but is SUSPENDED, don't dispatch - waiting for approval
             if ($nextStep instanceof WorkflowTaskStep && $nextStep->status === RunStatus::SUSPENDED) {
-                return;
+                return null;
             }
 
             // Task has succeeded
@@ -148,9 +198,22 @@ class DagWorkflowTrackerJobMiddleware {
             $task->failed_at = null;
             $task->save();
 
-            $this->dispatcher->dispatchDependantTasks($task);
-
-            $this->dispatcher->finalizeWorkflowStatus($task->workflow);
+            return $task;
         });
+
+        if ($completedTask === null) {
+            return;
+        }
+
+        // Deliberately OUTSIDE the transaction: the dependant-readiness check and the
+        // workflow finalization must observe this task's committed COMPLETED status.
+        // Inside the transaction, two dependencies completing concurrently on separate
+        // workers could each miss the other's uncommitted completion and BOTH skip the
+        // dependant (or leave the workflow unfinalized) — stranding the workflow.
+        // Post-commit, the last committer is guaranteed to see every completion; the
+        // overlap can at worst double-dispatch, which the stale-delivery guard above
+        // drops.
+        $this->dispatcher->dispatchDependantTasks($completedTask);
+        $this->dispatcher->finalizeWorkflowStatus($completedTask->workflow);
     }
 }

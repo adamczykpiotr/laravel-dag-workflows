@@ -25,10 +25,15 @@ class StatusFlowJob implements ShouldQueue {
     /** @var array<int, string> stepId => 'ok'|'fail'|'early' */
     public static array $behaviours = [];
 
+    /** @var array<int, int> step ids in the order their handlers actually ran */
+    public static array $executionLog = [];
+
     /** Guards the drain loop against re-processing the same faked job. */
     public bool $drained = false;
 
     public function handle(): void {
+        self::$executionLog[] = $this->workflowTaskStep->id;
+
         $behaviour = self::$behaviours[$this->workflowTaskStep->id] ?? 'ok';
 
         if ($behaviour === 'fail') {

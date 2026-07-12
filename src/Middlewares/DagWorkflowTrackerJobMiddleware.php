@@ -44,11 +44,12 @@ class DagWorkflowTrackerJobMiddleware {
         // Any other non-pending step is a stale/duplicate delivery (e.g. an
         // orphaned reservation redelivered after retry_after). Drop it:
         // re-running would duplicate the work and failing would be spurious.
-        if ($step->status !== RunStatus::PENDING) {
+        // The claim below is atomic (UPDATE ... WHERE status = PENDING), so two
+        // workers holding duplicate deliveries of the same step cannot both run
+        // the handler — only the one winning the row proceeds.
+        if ($this->beginWorkflowTaskStep($step) === false) {
             return null;
         }
-
-        $this->beginWorkflowTaskStep($step);
 
         try {
             $result = $next($job);
@@ -69,24 +70,43 @@ class DagWorkflowTrackerJobMiddleware {
 
 
     /**
+     * Atomically claim the step (PENDING -> RUNNING). Returns false when another
+     * delivery of the same step already claimed or processed it.
+     *
      * @param WorkflowTaskStep $step
-     * @return void
+     * @return bool
      * @throws Throwable
      */
-    protected function beginWorkflowTaskStep(WorkflowTaskStep $step): void {
+    protected function beginWorkflowTaskStep(WorkflowTaskStep $step): bool {
+        $startedAt = now();
+
+        $claimed = WorkflowTaskStep::query()
+            ->whereKey($step->id)
+            ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::PENDING)
+            ->update([
+                WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::RUNNING,
+                WorkflowTaskStep::ATTRIBUTE_STARTED_AT => $startedAt,
+                WorkflowTaskStep::ATTRIBUTE_FAILED_AT => null,
+                WorkflowTaskStep::ATTRIBUTE_COMPLETED_AT => null,
+            ]);
+
+        if ($claimed === 0) {
+            return false;
+        }
+
+        // Sync the in-memory model with the claim so later saves stay consistent.
         $step->status = RunStatus::RUNNING;
-        $step->started_at = now();
+        $step->started_at = $startedAt;
         $step->failed_at = null;
         $step->completed_at = null;
+        $step->syncChanges();
+        $step->syncOriginal();
 
         if ($step->order > 1) {
-            $step->save();
-            return;
+            return true;
         }
 
         DB::transaction(function() use ($step) {
-            $step->save();
-
             $task = $step->task;
             $task->status = RunStatus::RUNNING;
             $task->started_at = now();
@@ -103,6 +123,8 @@ class DagWorkflowTrackerJobMiddleware {
                 $workflow->save();
             }
         });
+
+        return true;
     }
 
 

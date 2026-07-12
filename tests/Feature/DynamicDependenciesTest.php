@@ -35,7 +35,7 @@ class DynamicDepsSinkJob implements ShouldQueue {
 
 /**
  * Covers dynamic dependencies: a dependsOn entry with a trailing wildcard
- * ("src:*") gates a task on the base task AND on every task it spawns at
+ * ("src*") gates a task on the base task AND on every task it spawns at
  * runtime (a ResolvableTask's children), which do not exist at store time.
  */
 class DynamicDependenciesTest extends TestCase {
@@ -74,7 +74,7 @@ class DynamicDependenciesTest extends TestCase {
                 items: $items,
                 jobs: fn($item) => new DynamicDepsTrackedJob(),
             ),
-            new Task('sink', new DynamicDepsSinkJob(), dependsOn: 'src:*'),
+            new Task('sink', new DynamicDepsSinkJob(), dependsOn: 'src*'),
         ]))->dispatch();
     }
 
@@ -119,7 +119,7 @@ class DynamicDependenciesTest extends TestCase {
 
         $this->parser()->parse(new WorkflowDefinition('wf', [
             new Task('a', new DynamicDepsTrackedJob()),
-            new Task('b', new DynamicDepsTrackedJob(), dependsOn: 'missing:*'),
+            new Task('b', new DynamicDepsTrackedJob(), dependsOn: 'missing*'),
         ]));
     }
 
@@ -127,11 +127,11 @@ class DynamicDependenciesTest extends TestCase {
     public function test_parser_accepts_a_dynamic_dependency_on_an_existing_task(): void {
         $dto = $this->parser()->parse(new WorkflowDefinition('wf', [
             new ResolvableTask('src', items: fn() => [], jobs: fn($item) => new DynamicDepsTrackedJob()),
-            new Task('sink', new DynamicDepsSinkJob(), dependsOn: 'src:*'),
+            new Task('sink', new DynamicDepsSinkJob(), dependsOn: 'src*'),
         ]));
 
         $sink = $dto->tasks->firstWhere(fn($task) => $task->name === 'sink');
-        $this->assertSame(['src:*'], $sink->dependsOn->toArray());
+        $this->assertSame(['src*'], $sink->dependsOn->toArray());
     }
 
 
@@ -149,7 +149,7 @@ class DynamicDependenciesTest extends TestCase {
 
         $this->parser()->parse(new WorkflowDefinition('wf', [
             new Task('a', new DynamicDepsTrackedJob(), dependsOn: 'b'),
-            new Task('b', new DynamicDepsTrackedJob(), dependsOn: 'a:*'),
+            new Task('b', new DynamicDepsTrackedJob(), dependsOn: 'a*'),
         ]));
     }
 
@@ -162,7 +162,7 @@ class DynamicDependenciesTest extends TestCase {
         $src = $this->taskByName($model, 'src');
         $sink = $this->taskByName($model, 'sink');
 
-        $this->assertSame(['src:*'], $sink->dynamic_dependencies);
+        $this->assertSame(['src*'], $sink->dynamic_dependencies);
         $this->assertNull($src->dynamic_dependencies);
 
         // Before the resolver runs, the sink is gated on the base task only —

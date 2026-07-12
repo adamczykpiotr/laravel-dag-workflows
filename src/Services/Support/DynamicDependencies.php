@@ -5,7 +5,7 @@ namespace AdamczykPiotr\DagWorkflows\Services\Support;
 use Illuminate\Support\Str;
 
 /**
- * A dynamic dependency is a dependsOn entry with a trailing wildcard ("Task name:*").
+ * A dynamic dependency is a dependsOn entry with a trailing wildcard ("Task name*").
  * It gates the dependant on the base task ("Task name") AND on every task the
  * base task spawns at runtime (names prefixed "Task name:"), so a task can wait
  * for all children of a ResolvableTask that do not exist yet at definition time.
@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 class DynamicDependencies {
 
     public const string RESERVED_CHARACTER = '*';
-    public const string SUFFIX = ':*';
+    public const string SUFFIX = '*';
 
 
     /**

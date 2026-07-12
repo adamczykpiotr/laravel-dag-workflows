@@ -158,7 +158,7 @@ class WorkflowRepository {
 
     /**
      * Task IDs a dependsOn entry gates on within the current workflow. A static
-     * dependency resolves to its named task; a dynamic one ("Task name:*") resolves
+     * dependency resolves to its named task; a dynamic one ("Task name*") resolves
      * to the base task plus every already-stored task matching the name prefix.
      *
      * @param Collection<string, int> $mapping

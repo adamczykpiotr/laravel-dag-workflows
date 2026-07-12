@@ -168,7 +168,7 @@ class WorkflowDefinitionParser {
 
 
     /**
-     * "*" is reserved for the dynamic dependency syntax ("Task name:*") and would
+     * "*" is reserved for the dynamic dependency syntax ("Task name*") and would
      * make such dependency declarations ambiguous if allowed in task names.
      *
      * @param string $taskName
@@ -245,7 +245,7 @@ class WorkflowDefinitionParser {
 
         foreach ($tasks as $taskName => $task) {
             foreach ($task->dependsOn as $dependency) {
-                // Dynamic dependencies ("Task name:*") gate on the base task and on every
+                // Dynamic dependencies ("Task name*") gate on the base task and on every
                 // task it spawns at runtime — the base task must exist upfront.
                 if ($namedTasks->has(DynamicDependencies::baseTaskName($dependency)) === false) {
                     throw new WorkflowTaskUnresolvedDependencyException(

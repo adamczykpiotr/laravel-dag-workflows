@@ -174,7 +174,7 @@ had run — dependant tasks are dispatched and the workflow status is finalized 
 
 A `ResolvableTask` completes once its resolver has spawned the child tasks — depending
 on it by name therefore does NOT wait for the children. To gate a task on the base task
-AND on every task it spawns at runtime, suffix the dependency with `:*`:
+AND on every task it spawns at runtime, suffix the dependency with `*`:
 
 ```php
 new ResolvableTask(
@@ -185,7 +185,7 @@ new ResolvableTask(
 new Task(
     name: 'Rebuild search index',
     jobs: new RebuildSearchIndexJob(),
-    dependsOn: 'Sync feeds:*', // waits for "Sync feeds" and every "Sync feeds:<item>" task
+    dependsOn: 'Sync feeds*', // waits for "Sync feeds" and every "Sync feeds:<item>" task
 ),
 ```
 

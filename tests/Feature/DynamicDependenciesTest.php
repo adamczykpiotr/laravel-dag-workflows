@@ -35,7 +35,7 @@ class DynamicDepsSinkJob implements ShouldQueue {
 
 /**
  * Covers dynamic dependencies: a dependsOn entry with a trailing wildcard
- * ("src*", "POI: *") gates a task on every other task matching the prefix —
+ * ("src*", "Import: *") gates a task on every other task matching the prefix —
  * including tasks spawned at runtime (a ResolvableTask's children), which do
  * not exist at store time. The declaring task never matches its own wildcard.
  */
@@ -139,11 +139,11 @@ class DynamicDependenciesTest extends TestCase {
     public function test_parser_rejects_a_wildcard_matching_only_the_declaring_task_itself(): void {
         $this->expectException(WorkflowTaskUnresolvedDependencyException::class);
 
-        // "POI: *" matches "POI: Aggregate" itself and nothing else — self-matches
+        // "Import: *" matches "Import: Summary" itself and nothing else — self-matches
         // do not count, so there is no anchor to gate on.
         $this->parser()->parse(new WorkflowDefinition('wf', [
             new Task('unrelated', new DynamicDepsTrackedJob()),
-            new Task('POI: Aggregate', new DynamicDepsSinkJob(), dependsOn: 'POI: *'),
+            new Task('Import: Summary', new DynamicDepsSinkJob(), dependsOn: 'Import: *'),
         ]));
     }
 
@@ -231,21 +231,21 @@ class DynamicDependenciesTest extends TestCase {
     // --- prefix globs across a task namespace ---
 
     /**
-     * "POI: Schools" (static), "POI: Parcels" (resolvable) and "POI: Aggregate"
-     * gated on "POI: *" — the aggregate waits for both siblings and every task
+     * "Import: Customers" (static), "Import: Orders" (resolvable) and "Import: Summary"
+     * gated on "Import: *" — the summary waits for both siblings and every task
      * the resolvable spawns, and never matches itself.
      *
      * @return Workflow
      */
     private function dispatchNamespaceSample(): Workflow {
         return (new WorkflowDefinition('wf', [
-            new Task('POI: Schools', new DynamicDepsTrackedJob()),
+            new Task('Import: Customers', new DynamicDepsTrackedJob()),
             new ResolvableTask(
-                name: 'POI: Parcels',
-                items: fn() => ['inpost' => 'inpost', 'dpd' => 'dpd'],
+                name: 'Import: Orders',
+                items: fn() => ['us' => 'us', 'eu' => 'eu'],
                 jobs: fn($item) => new DynamicDepsTrackedJob(),
             ),
-            new Task('POI: Aggregate', new DynamicDepsSinkJob(), dependsOn: 'POI: *'),
+            new Task('Import: Summary', new DynamicDepsSinkJob(), dependsOn: 'Import: *'),
         ]))->dispatch();
     }
 
@@ -253,22 +253,22 @@ class DynamicDependenciesTest extends TestCase {
     public function test_glob_gates_on_every_matching_sibling_but_not_on_itself(): void {
         $model = $this->dispatchNamespaceSample();
 
-        $dependencyNames = $this->taskByName($model, 'POI: Aggregate')
+        $dependencyNames = $this->taskByName($model, 'Import: Summary')
             ->dependencies()
             ->pluck(WorkflowTask::ATTRIBUTE_NAME)
             ->sort()
             ->values()
             ->toArray();
 
-        $this->assertSame(['POI: Parcels', 'POI: Schools'], $dependencyNames);
+        $this->assertSame(['Import: Customers', 'Import: Orders'], $dependencyNames);
     }
 
 
     public function test_glob_dependant_waits_for_siblings_and_every_spawned_task(): void {
         $model = $this->dispatchNamespaceSample();
-        $this->runResolver($model, 'POI: Parcels');
+        $this->runResolver($model, 'Import: Orders');
 
-        $dependencyNames = $this->taskByName($model, 'POI: Aggregate')
+        $dependencyNames = $this->taskByName($model, 'Import: Summary')
             ->dependencies()
             ->pluck(WorkflowTask::ATTRIBUTE_NAME)
             ->sort()
@@ -276,16 +276,16 @@ class DynamicDependenciesTest extends TestCase {
             ->toArray();
 
         $this->assertSame(
-            ['POI: Parcels', 'POI: Parcels:dpd', 'POI: Parcels:inpost', 'POI: Schools'],
+            ['Import: Customers', 'Import: Orders', 'Import: Orders:eu', 'Import: Orders:us'],
             $dependencyNames
         );
 
-        $this->completeTaskAndDispatchDependants($model, 'POI: Schools');
-        $this->completeTaskAndDispatchDependants($model, 'POI: Parcels');
-        $this->completeTaskAndDispatchDependants($model, 'POI: Parcels:inpost');
+        $this->completeTaskAndDispatchDependants($model, 'Import: Customers');
+        $this->completeTaskAndDispatchDependants($model, 'Import: Orders');
+        $this->completeTaskAndDispatchDependants($model, 'Import: Orders:us');
         Queue::assertNotPushed(DynamicDepsSinkJob::class);
 
-        $this->completeTaskAndDispatchDependants($model, 'POI: Parcels:dpd');
+        $this->completeTaskAndDispatchDependants($model, 'Import: Orders:eu');
         Queue::assertPushed(DynamicDepsSinkJob::class, 1);
     }
 

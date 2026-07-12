@@ -178,16 +178,16 @@ is a prefix glob: it gates the task on every OTHER task whose name starts with t
 prefix, including tasks that only come into existence at runtime:
 
 ```php
-new Task(name: 'POI: Schools', jobs: new SyncSchoolsJob()),
+new Task(name: 'Import: Customers', jobs: new ImportCustomersJob()),
 new ResolvableTask(
-    name: 'POI: Parcels',
-    items: fn() => $brands,
-    jobs: fn(string $brand) => new SyncParcelBrandJob($brand),
+    name: 'Import: Orders',
+    items: fn() => $regions,
+    jobs: fn(string $region) => new ImportOrdersJob($region),
 ),
 new Task(
-    name: 'POI: Aggregate',
-    jobs: new AggregatePoisJob(),
-    dependsOn: 'POI: *', // waits for POI: Schools, POI: Parcels and every POI: Parcels:<brand> task
+    name: 'Import: Summary',
+    jobs: new BuildImportSummaryJob(),
+    dependsOn: 'Import: *', // waits for Import: Customers, Import: Orders and every Import: Orders:<region> task
 ),
 ```
 

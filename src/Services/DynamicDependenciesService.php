@@ -5,13 +5,13 @@ namespace AdamczykPiotr\DagWorkflows\Services;
 use Illuminate\Support\Str;
 
 /**
- * A dynamic dependency is a dependsOn entry with a trailing wildcard ("POI: *").
+ * A dynamic dependency is a dependsOn entry with a trailing wildcard ("Import: *").
  * It gates the dependant on every OTHER task whose name starts with the prefix —
  * both tasks known at definition time and tasks spawned at runtime (a
  * ResolvableTask's children), which do not exist yet when the workflow is stored.
  *
  * The declaring task never matches its own wildcard, so an aggregate task may
- * live in the namespace it waits for ("POI: Aggregate" depending on "POI: *").
+ * live in the namespace it waits for ("Import: Summary" depending on "Import: *").
  *
  * "*" is reserved for this syntax and must not appear in task names.
  */

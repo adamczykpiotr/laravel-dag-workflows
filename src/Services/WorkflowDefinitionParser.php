@@ -257,7 +257,7 @@ class WorkflowDefinitionParser {
 
         foreach ($tasks as $task) {
             foreach ($task->dependsOn as $dependency) {
-                // Dynamic dependencies ("POI: *") gate on every other task matching the
+                // Dynamic dependencies ("Import: *") gate on every other task matching the
                 // prefix, including tasks spawned at runtime. At least one match must
                 // exist upfront — it is the anchor that keeps the dependant parked
                 // until runtime-spawned matches have been wired in.

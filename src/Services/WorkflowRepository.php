@@ -85,7 +85,7 @@ class WorkflowRepository {
         $storedDynamicDependants = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
             ->whereNotNull(WorkflowTask::ATTRIBUTE_DYNAMIC_DEPENDENCIES)
-            ->get();
+            ->get([WorkflowTask::ATTRIBUTE_ID, WorkflowTask::ATTRIBUTE_NAME, WorkflowTask::ATTRIBUTE_DYNAMIC_DEPENDENCIES]);
 
         $tasks = $taskDtos->map(function(TaskDto $taskDto) use ($workflow) {
             $dynamicDependencies = collect($taskDto->dependsOn)
@@ -109,9 +109,12 @@ class WorkflowRepository {
             WorkflowTask::insert($chunk->toArray());
         }
 
+        // get([...]) + mapWithKeys instead of pluck(): selects the same two columns
+        // but keeps the key/value types larastan can verify — pluck() with column-name
+        // strings degrades to Collection<(int|string), mixed>.
         $mapping = WorkflowTask::query()
             ->where(WorkflowTask::ATTRIBUTE_WORKFLOW_ID, $workflow->id)
-            ->get()
+            ->get([WorkflowTask::ATTRIBUTE_ID, WorkflowTask::ATTRIBUTE_NAME])
             ->mapWithKeys(fn(WorkflowTask $task) => [$task->name => $task->id]);
 
         $steps = $taskDtos->map(function(TaskDto $taskDto) use ($mapping, $workflow) {
@@ -165,7 +168,7 @@ class WorkflowRepository {
 
     /**
      * Task IDs a dependsOn entry gates on within the current workflow. A static
-     * dependency resolves to its named task; a dynamic one ("POI: *") resolves
+     * dependency resolves to its named task; a dynamic one ("Import: *") resolves
      * to every already-stored task matching the prefix, except the declarer.
      *
      * @param Collection<string, int> $mapping

@@ -119,7 +119,7 @@ class DagWorkflowTrackerJobMiddleware {
             return;
         }
 
-        DB::transaction(function() use ($step) {
+        $completedTask = DB::transaction(function() use ($step) {
             $step->status = RunStatus::COMPLETED;
             $step->completed_at = now();
             $step->failed_at = null;
@@ -133,12 +133,12 @@ class DagWorkflowTrackerJobMiddleware {
             // Continuing steps - only if next step is PENDING (not SUSPENDED)
             if ($nextStep instanceof WorkflowTaskStep && $nextStep->status === RunStatus::PENDING) {
                 $this->dispatcher->dispatchStep($nextStep);
-                return;
+                return null;
             }
 
             // If next step exists but is SUSPENDED, don't dispatch - waiting for approval
             if ($nextStep instanceof WorkflowTaskStep && $nextStep->status === RunStatus::SUSPENDED) {
-                return;
+                return null;
             }
 
             // Task has succeeded
@@ -148,9 +148,22 @@ class DagWorkflowTrackerJobMiddleware {
             $task->failed_at = null;
             $task->save();
 
-            $this->dispatcher->dispatchDependantTasks($task);
-
-            $this->dispatcher->finalizeWorkflowStatus($task->workflow);
+            return $task;
         });
+
+        if ($completedTask === null) {
+            return;
+        }
+
+        // Deliberately OUTSIDE the transaction: the dependant-readiness check and the
+        // workflow finalization must observe this task's committed COMPLETED status.
+        // Inside the transaction, two dependencies completing concurrently on separate
+        // workers could each miss the other's uncommitted completion and BOTH skip the
+        // dependant (or leave the workflow unfinalized) — stranding the workflow.
+        // Post-commit, the last committer is guaranteed to see every completion; the
+        // overlap can at worst double-dispatch, which the stale-delivery guard above
+        // drops.
+        $this->dispatcher->dispatchDependantTasks($completedTask);
+        $this->dispatcher->finalizeWorkflowStatus($completedTask->workflow);
     }
 }

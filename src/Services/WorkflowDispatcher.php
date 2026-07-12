@@ -342,11 +342,13 @@ class WorkflowDispatcher {
             $task->failed_at = null;
             $task->paused_at = null;
             $task->save();
-
-            $this->dispatchDependantTasks($task);
-
-            $this->finalizeWorkflowStatus($task->workflow);
         });
+
+        // Post-commit on purpose — see DagWorkflowTrackerJobMiddleware: the readiness
+        // check must see this completion committed, or concurrent completers can all
+        // skip a shared dependant and strand the workflow.
+        $this->dispatchDependantTasks($task);
+        $this->finalizeWorkflowStatus($task->workflow);
 
         return true;
     }

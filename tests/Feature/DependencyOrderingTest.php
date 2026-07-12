@@ -5,7 +5,25 @@ use AdamczykPiotr\DagWorkflows\Middlewares\DagWorkflowTrackerJobMiddleware;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use AdamczykPiotr\DagWorkflows\Tests\TestCase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Testing\Fakes\QueueFake;
+
+/**
+ * Queue fake recording the DB transaction nesting level at every push, so tests
+ * can assert WHERE in the completion flow a job was dispatched from.
+ */
+class TransactionLevelRecordingQueueFake extends QueueFake {
+
+    /** @var array<int, array{class: string, level: int}> */
+    public array $pushes = [];
+
+    public function push($job = null, $data = '', $queue = null) {
+        $this->pushes[] = ['class' => is_object($job) ? get_class($job) : (string)$job, 'level' => DB::transactionLevel()];
+
+        return parent::push($job, $data, $queue);
+    }
+}
 
 /**
  * Guards the core dependsOn invariant: a task's steps NEVER run before every
@@ -141,6 +159,35 @@ class DependencyOrderingTest extends TestCase {
 
         $this->drainOnlyTask($tasks['d']);
         $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
+    }
+
+
+    /**
+     * Dependant readiness is checked AFTER the completion transaction commits.
+     * Checking inside it is a stranding race: two dependencies completing
+     * concurrently on separate workers would each miss the other's uncommitted
+     * completion and both skip their shared dependant, hanging the workflow.
+     * A post-commit check guarantees the last committer sees every completion.
+     */
+    public function test_dependant_tasks_are_dispatched_outside_the_completion_transaction(): void {
+        $fake = new TransactionLevelRecordingQueueFake(app());
+        Queue::swap($fake);
+
+        [$workflow] = $this->buildWorkflow([
+            'a' => ['steps' => 1],
+            'b' => ['deps' => ['a'], 'steps' => 1],
+        ]);
+
+        $this->runWorkflow($workflow);
+
+        $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
+
+        // Two pushes: a's step at workflow start, b's step when a completes —
+        // both from outside any open transaction.
+        $this->assertCount(2, $fake->pushes);
+        foreach ($fake->pushes as $push) {
+            $this->assertSame(0, $push['level'], "{$push['class']} was dispatched inside an open transaction.");
+        }
     }
 
 

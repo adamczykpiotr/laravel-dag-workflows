@@ -170,6 +170,32 @@ The current step is marked `COMPLETED`, all remaining steps of the task are mark
 `SKIPPED` (a terminal, non-failing status), and the task completes as if every step
 had run — dependant tasks are dispatched and the workflow status is finalized as usual.
 
+## Workflow endpoint formats
+
+`WorkflowController::show` defaults to a lightweight summary —
+no dependency wiring, no estimator:
+
+```json
+{
+    "id": 134,
+    "name": "Sync POIs",
+    "status": "RUNNING",
+    "durationSeconds": 512,
+    "taskStatuses": { "COMPLETED": 7, "RUNNING": 2, "PENDING": 105 },
+    "stepStatuses": { "COMPLETED": 21, "RUNNING": 2, "PENDING": 211 },
+    "taskCompletionPercentage": 6.14,
+    "stepCompletionPercentage": 8.97,
+    "stepProgressPercentage": 9.42
+}
+```
+
+`SKIPPED` counts as done in the percentages (it is the terminal, non-failing
+status of steps bypassed by an early task completion), and
+`stepProgressPercentage` additionally credits running steps with their
+self-reported `progress`. Append `?format=full`
+for the previous behaviour: the complete tasks/steps tree with dependencies
+and timing estimates.
+
 ## Dynamic dependencies (waiting for a `ResolvableTask`'s spawned tasks)
 
 A `ResolvableTask` completes once its resolver has spawned the child tasks — depending

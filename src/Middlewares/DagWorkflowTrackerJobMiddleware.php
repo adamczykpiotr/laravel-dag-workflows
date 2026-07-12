@@ -48,6 +48,12 @@ class DagWorkflowTrackerJobMiddleware {
         // workers holding duplicate deliveries of the same step cannot both run
         // the handler — only the one winning the row proceeds.
         if ($this->beginWorkflowTaskStep($step) === false) {
+            // A redelivery of a step whose task already completed means a worker
+            // died in the window between committing the completion and pushing the
+            // dependant jobs. Re-firing the dispatch is idempotent (pending-only
+            // + atomic claim), so use the redelivery to heal the stranded window.
+            $this->redispatchDependantsOfCompletedTask($step);
+
             return null;
         }
 
@@ -66,6 +72,28 @@ class DagWorkflowTrackerJobMiddleware {
             // Re-throw the exception so Laravel's queue system can handle it properly
             throw $t;
         }
+    }
+
+
+    /**
+     * @param WorkflowTaskStep $step
+     * @return void
+     */
+    protected function redispatchDependantsOfCompletedTask(WorkflowTaskStep $step): void {
+        $step->refresh();
+
+        if ($step->status !== RunStatus::COMPLETED) {
+            return;
+        }
+
+        $task = $step->task;
+
+        if ($task->status !== RunStatus::COMPLETED) {
+            return;
+        }
+
+        $this->dispatcher->dispatchDependantTasks($task);
+        $this->dispatcher->finalizeWorkflowStatus($task->workflow);
     }
 
 

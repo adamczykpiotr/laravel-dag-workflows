@@ -125,4 +125,33 @@ class RedeliveredStepTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $this->freshStep($step)->status);
         $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
     }
+
+
+    /**
+     * Crash window: a worker commits a task's COMPLETED status but dies before
+     * pushing the dependant jobs. The queue redelivers the completed step —
+     * the drop path must use that redelivery to re-dispatch the dependants
+     * instead of stranding them.
+     */
+    public function test_redelivered_completed_step_heals_undispatched_dependants(): void {
+        [$workflow, $tasks, $steps] = $this->buildWorkflow([
+            'a' => ['steps' => 1],
+            'b' => ['deps' => ['a'], 'steps' => 1],
+        ]);
+
+        // Simulate the crash aftermath: a fully completed, b never dispatched.
+        $steps['a'][1]->status = RunStatus::COMPLETED;
+        $steps['a'][1]->completed_at = now();
+        $steps['a'][1]->save();
+        $tasks['a']->status = RunStatus::COMPLETED;
+        $tasks['a']->completed_at = now();
+        $tasks['a']->save();
+
+        $handlerRan = $this->redeliver($steps['a'][1]);
+
+        $this->assertFalse($handlerRan);
+        $this->drainWorkflowQueue();
+        $this->assertSame(RunStatus::COMPLETED, $tasks['b']->refresh()->status);
+        $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
+    }
 }

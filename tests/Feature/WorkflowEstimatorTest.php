@@ -201,7 +201,7 @@ class WorkflowEstimatorTest extends TestCase {
         $running = $this->addStep($active, RunStatus::RUNNING, 'JobA', createdAt: now()->subSeconds(20));
 
         $controller = new \AdamczykPiotr\DagWorkflows\Http\Controllers\WorkflowController();
-        $response = $controller->show($wf->id);
+        $response = $controller->show(\Illuminate\Http\Request::create("/workflows/{$wf->id}?format=full"), $wf->id);
         $payload = json_decode($response->getContent(), true);
 
         $this->assertSame(120, $payload['durationSeconds']);

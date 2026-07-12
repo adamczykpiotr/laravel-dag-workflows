@@ -26,14 +26,9 @@ class WorkflowController {
             ])
             ->findOrFail($id);
 
-        if ($isFull) {
-            return response()->json(
-                new WorkflowResource($workflow, (new WorkflowEstimator())->build($workflow))
-            );
-        }
-
-        return response()->json(
-            new WorkflowSummaryResource($workflow)
+        return response()->json($isFull
+            ? new WorkflowResource($workflow, (new WorkflowEstimator())->build($workflow))
+            : new WorkflowSummaryResource($workflow)
         );
     }
 }

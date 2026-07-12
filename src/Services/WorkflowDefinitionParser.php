@@ -16,13 +16,21 @@ use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskReservedCharacterException
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskUnresolvedDependencyException;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskWithoutJobException;
 use AdamczykPiotr\DagWorkflows\Jobs\ResolvableTaskResolverJob;
-use AdamczykPiotr\DagWorkflows\Services\Support\DynamicDependencies;
 use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
 use Closure;
 use Illuminate\Support\Collection;
 use Laravel\SerializableClosure\SerializableClosure;
 
 class WorkflowDefinitionParser {
+
+    /**
+     * @param DynamicDependenciesService $dynamicDependencies
+     */
+    public function __construct(
+        protected DynamicDependenciesService $dynamicDependencies,
+    ) {
+    }
+
 
     /**
      * @param Workflow $definition
@@ -176,9 +184,9 @@ class WorkflowDefinitionParser {
      * @throws WorkflowTaskReservedCharacterException
      */
     protected function guardReservedCharacters(string $taskName): void {
-        if (str_contains($taskName, DynamicDependencies::RESERVED_CHARACTER)) {
+        if (str_contains($taskName, DynamicDependenciesService::RESERVED_CHARACTER)) {
             throw new WorkflowTaskReservedCharacterException(
-                "Task name {$taskName} contains the reserved character " . DynamicDependencies::RESERVED_CHARACTER . '.'
+                "Task name {$taskName} contains the reserved character " . DynamicDependenciesService::RESERVED_CHARACTER . '.'
             );
         }
     }
@@ -214,8 +222,8 @@ class WorkflowDefinitionParser {
 
             $dependencies = $namedTasks->get($taskName)->dependsOn ?? collect();
             $dependencies
-                ->flatMap(fn(string $dependency) => DynamicDependencies::isDynamic($dependency)
-                    ? $namedTasks->keys()->filter(fn(string $name) => DynamicDependencies::matches($dependency, $name, $taskName))
+                ->flatMap(fn(string $dependency) => $this->dynamicDependencies->isDynamic($dependency)
+                    ? $namedTasks->keys()->filter(fn(string $name) => $this->dynamicDependencies->matches($dependency, $name, $taskName))
                     : collect([$dependency]))
                 ->each(fn(string $dependency) => $checkForCycles($dependency));
 
@@ -253,9 +261,9 @@ class WorkflowDefinitionParser {
                 // prefix, including tasks spawned at runtime. At least one match must
                 // exist upfront — it is the anchor that keeps the dependant parked
                 // until runtime-spawned matches have been wired in.
-                if (DynamicDependencies::isDynamic($dependency)) {
+                if ($this->dynamicDependencies->isDynamic($dependency)) {
                     $hasMatch = $namedTasks->keys()
-                        ->contains(fn(string $name) => DynamicDependencies::matches($dependency, $name, $task->name));
+                        ->contains(fn(string $name) => $this->dynamicDependencies->matches($dependency, $name, $task->name));
 
                     if ($hasMatch === false) {
                         throw new WorkflowTaskUnresolvedDependencyException(

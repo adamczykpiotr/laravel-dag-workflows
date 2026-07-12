@@ -10,7 +10,6 @@ use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskUnresolvedDependencyExcept
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
-use AdamczykPiotr\DagWorkflows\Services\Support\DynamicDependencies;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -18,6 +17,15 @@ use Throwable;
 class WorkflowRepository {
 
     const int INSERT_CHUNK_SIZE = 5_000;
+
+
+    /**
+     * @param DynamicDependenciesService $dynamicDependencies
+     */
+    public function __construct(
+        protected DynamicDependenciesService $dynamicDependencies,
+    ) {
+    }
 
 
     /**
@@ -81,7 +89,7 @@ class WorkflowRepository {
 
         $tasks = $taskDtos->map(function(TaskDto $taskDto) use ($workflow) {
             $dynamicDependencies = collect($taskDto->dependsOn)
-                ->filter(fn(string $dependencyName) => DynamicDependencies::isDynamic($dependencyName))
+                ->filter(fn(string $dependencyName) => $this->dynamicDependencies->isDynamic($dependencyName))
                 ->values();
 
             return [
@@ -166,7 +174,7 @@ class WorkflowRepository {
      * @return Collection<int, int>
      */
     protected function resolveDependencyIds(Collection $mapping, string $dependencyName, string $declaringTaskName): Collection {
-        if (DynamicDependencies::isDynamic($dependencyName) === false) {
+        if ($this->dynamicDependencies->isDynamic($dependencyName) === false) {
             $dependencyId = $mapping->get($dependencyName);
 
             if ($dependencyId === null) {
@@ -179,7 +187,7 @@ class WorkflowRepository {
         }
 
         return $mapping
-            ->filter(fn(int $taskId, string $taskName) => DynamicDependencies::matches($dependencyName, $taskName, $declaringTaskName))
+            ->filter(fn(int $taskId, string $taskName) => $this->dynamicDependencies->matches($dependencyName, $taskName, $declaringTaskName))
             ->values();
     }
 
@@ -202,7 +210,7 @@ class WorkflowRepository {
 
         return $storedDynamicDependants->flatMap(function(WorkflowTask $dependant) use ($appendedIds) {
             return collect($dependant->dynamic_dependencies)
-                ->flatMap(fn(string $wildcard) => $appendedIds->filter(fn(int $taskId, string $taskName) => DynamicDependencies::matches($wildcard, $taskName, $dependant->name)))
+                ->flatMap(fn(string $wildcard) => $appendedIds->filter(fn(int $taskId, string $taskName) => $this->dynamicDependencies->matches($wildcard, $taskName, $dependant->name)))
                 ->unique()
                 ->values()
                 ->map(function(int $dependencyId) use ($dependant) {

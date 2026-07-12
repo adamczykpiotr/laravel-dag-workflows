@@ -13,7 +13,6 @@ use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\Support\DynamicDependencies;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Throwable;
 
 class WorkflowRepository {
@@ -136,7 +135,7 @@ class WorkflowRepository {
             $taskId = $mapping->get($taskDto->name);
 
             return collect($taskDto->dependsOn)
-                ->flatMap(fn(string $dependencyName) => $this->resolveDependencyIds($mapping, $dependencyName))
+                ->flatMap(fn(string $dependencyName) => $this->resolveDependencyIds($mapping, $dependencyName, $taskDto->name))
                 ->unique()
                 ->map(function(int $dependencyId) use ($taskId) {
                     return [
@@ -158,14 +157,15 @@ class WorkflowRepository {
 
     /**
      * Task IDs a dependsOn entry gates on within the current workflow. A static
-     * dependency resolves to its named task; a dynamic one ("Task name*") resolves
-     * to the base task plus every already-stored task matching the name prefix.
+     * dependency resolves to its named task; a dynamic one ("POI: *") resolves
+     * to every already-stored task matching the prefix, except the declarer.
      *
      * @param Collection<string, int> $mapping
      * @param string $dependencyName
+     * @param string $declaringTaskName
      * @return Collection<int, int>
      */
-    protected function resolveDependencyIds(Collection $mapping, string $dependencyName): Collection {
+    protected function resolveDependencyIds(Collection $mapping, string $dependencyName, string $declaringTaskName): Collection {
         if (DynamicDependencies::isDynamic($dependencyName) === false) {
             $dependencyId = $mapping->get($dependencyName);
 
@@ -178,11 +178,8 @@ class WorkflowRepository {
             return collect([$dependencyId]);
         }
 
-        $baseTaskName = DynamicDependencies::baseTaskName($dependencyName);
-        $childPrefix = DynamicDependencies::childPrefix($dependencyName);
-
         return $mapping
-            ->filter(fn(int $taskId, string $taskName) => $taskName === $baseTaskName || Str::startsWith($taskName, $childPrefix))
+            ->filter(fn(int $taskId, string $taskName) => DynamicDependencies::matches($dependencyName, $taskName, $declaringTaskName))
             ->values();
     }
 
@@ -205,7 +202,7 @@ class WorkflowRepository {
 
         return $storedDynamicDependants->flatMap(function(WorkflowTask $dependant) use ($appendedIds) {
             return collect($dependant->dynamic_dependencies)
-                ->flatMap(fn(string $wildcard) => $appendedIds->filter(fn(int $taskId, string $taskName) => Str::startsWith($taskName, DynamicDependencies::childPrefix($wildcard))))
+                ->flatMap(fn(string $wildcard) => $appendedIds->filter(fn(int $taskId, string $taskName) => DynamicDependencies::matches($wildcard, $taskName, $dependant->name)))
                 ->unique()
                 ->values()
                 ->map(function(int $dependencyId) use ($dependant) {

@@ -173,26 +173,28 @@ had run — dependant tasks are dispatched and the workflow status is finalized 
 ## Dynamic dependencies (waiting for a `ResolvableTask`'s spawned tasks)
 
 A `ResolvableTask` completes once its resolver has spawned the child tasks — depending
-on it by name therefore does NOT wait for the children. To gate a task on the base task
-AND on every task it spawns at runtime, suffix the dependency with `*`:
+on it by name therefore does NOT wait for the children. A dependency ending with `*`
+is a prefix glob: it gates the task on every OTHER task whose name starts with the
+prefix, including tasks that only come into existence at runtime:
 
 ```php
+new Task(name: 'POI: Schools', jobs: new SyncSchoolsJob()),
 new ResolvableTask(
-    name: 'Sync feeds',
-    items: fn() => $feeds,
-    jobs: fn(string $feed) => new SyncFeedJob($feed),
+    name: 'POI: Parcels',
+    items: fn() => $brands,
+    jobs: fn(string $brand) => new SyncParcelBrandJob($brand),
 ),
 new Task(
-    name: 'Rebuild search index',
-    jobs: new RebuildSearchIndexJob(),
-    dependsOn: 'Sync feeds*', // waits for "Sync feeds" and every "Sync feeds:<item>" task
+    name: 'POI: Aggregate',
+    jobs: new AggregatePoisJob(),
+    dependsOn: 'POI: *', // waits for POI: Schools, POI: Parcels and every POI: Parcels:<brand> task
 ),
 ```
 
-The base task must exist in the workflow definition. When the resolver spawns its
-children, they are wired as additional dependencies of every task that declared the
-dynamic dependency; if the resolver spawns nothing, the dependant runs right after
-the base task completes.
+The declaring task never matches its own wildcard, so the aggregate may live in the
+namespace it waits for. At least one other task must match the glob at definition
+time — that anchor keeps the dependant parked until runtime-spawned matches (which
+are wired in while their resolver is still running) have been attached.
 
 `*` is reserved for this syntax — task names containing it are rejected with a
 `WorkflowTaskReservedCharacterException`.

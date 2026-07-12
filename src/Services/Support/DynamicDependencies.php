@@ -5,17 +5,19 @@ namespace AdamczykPiotr\DagWorkflows\Services\Support;
 use Illuminate\Support\Str;
 
 /**
- * A dynamic dependency is a dependsOn entry with a trailing wildcard ("Task name*").
- * It gates the dependant on the base task ("Task name") AND on every task the
- * base task spawns at runtime (names prefixed "Task name:"), so a task can wait
- * for all children of a ResolvableTask that do not exist yet at definition time.
+ * A dynamic dependency is a dependsOn entry with a trailing wildcard ("POI: *").
+ * It gates the dependant on every OTHER task whose name starts with the prefix —
+ * both tasks known at definition time and tasks spawned at runtime (a
+ * ResolvableTask's children), which do not exist yet when the workflow is stored.
+ *
+ * The declaring task never matches its own wildcard, so an aggregate task may
+ * live in the namespace it waits for ("POI: Aggregate" depending on "POI: *").
  *
  * "*" is reserved for this syntax and must not appear in task names.
  */
 class DynamicDependencies {
 
     public const string RESERVED_CHARACTER = '*';
-    public const string SUFFIX = '*';
 
 
     /**
@@ -23,31 +25,29 @@ class DynamicDependencies {
      * @return bool
      */
     public static function isDynamic(string $dependencyName): bool {
-        return Str::endsWith($dependencyName, self::SUFFIX);
+        return Str::endsWith($dependencyName, self::RESERVED_CHARACTER);
     }
 
 
     /**
-     * The task name a dynamic dependency gates on upfront. Static dependency
-     * names pass through unchanged.
+     * The task name prefix a dynamic dependency matches against.
      *
      * @param string $dependencyName
      * @return string
      */
-    public static function baseTaskName(string $dependencyName): string {
-        return self::isDynamic($dependencyName)
-            ? Str::substr($dependencyName, 0, -Str::length(self::SUFFIX))
-            : $dependencyName;
+    public static function prefix(string $dependencyName): string {
+        return Str::substr($dependencyName, 0, -Str::length(self::RESERVED_CHARACTER));
     }
 
 
     /**
-     * The name prefix ("Task name:") the base task's spawned children share.
-     *
      * @param string $dependencyName
-     * @return string
+     * @param string $taskName
+     * @param string $declaringTaskName
+     * @return bool
      */
-    public static function childPrefix(string $dependencyName): string {
-        return self::baseTaskName($dependencyName) . ':';
+    public static function matches(string $dependencyName, string $taskName, string $declaringTaskName): bool {
+        return $taskName !== $declaringTaskName
+            && Str::startsWith($taskName, self::prefix($dependencyName));
     }
 }

@@ -213,7 +213,11 @@ class WorkflowDefinitionParser {
             $recursionStack->put($taskName, true);
 
             $dependencies = $namedTasks->get($taskName)->dependsOn ?? collect();
-            $dependencies->each(fn(string $dependency) => $checkForCycles(DynamicDependencies::baseTaskName($dependency)));
+            $dependencies
+                ->flatMap(fn(string $dependency) => DynamicDependencies::isDynamic($dependency)
+                    ? $namedTasks->keys()->filter(fn(string $name) => DynamicDependencies::matches($dependency, $name, $taskName))
+                    : collect([$dependency]))
+                ->each(fn(string $dependency) => $checkForCycles($dependency));
 
             $recursionStack->pull($taskName);
             $visited->put($taskName, true);
@@ -243,13 +247,28 @@ class WorkflowDefinitionParser {
             );
         }
 
-        foreach ($tasks as $taskName => $task) {
+        foreach ($tasks as $task) {
             foreach ($task->dependsOn as $dependency) {
-                // Dynamic dependencies ("Task name*") gate on the base task and on every
-                // task it spawns at runtime — the base task must exist upfront.
-                if ($namedTasks->has(DynamicDependencies::baseTaskName($dependency)) === false) {
+                // Dynamic dependencies ("POI: *") gate on every other task matching the
+                // prefix, including tasks spawned at runtime. At least one match must
+                // exist upfront — it is the anchor that keeps the dependant parked
+                // until runtime-spawned matches have been wired in.
+                if (DynamicDependencies::isDynamic($dependency)) {
+                    $hasMatch = $namedTasks->keys()
+                        ->contains(fn(string $name) => DynamicDependencies::matches($dependency, $name, $task->name));
+
+                    if ($hasMatch === false) {
+                        throw new WorkflowTaskUnresolvedDependencyException(
+                            "Task {$task->name} has a dynamic dependency {$dependency} matching no other task."
+                        );
+                    }
+
+                    continue;
+                }
+
+                if ($namedTasks->has($dependency) === false) {
                     throw new WorkflowTaskUnresolvedDependencyException(
-                        "Task {$taskName} has an unresolved dependency on task {$dependency}."
+                        "Task {$task->name} has an unresolved dependency on task {$dependency}."
                     );
                 }
             }

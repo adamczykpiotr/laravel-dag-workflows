@@ -35,8 +35,9 @@ class DynamicDepsSinkJob implements ShouldQueue {
 
 /**
  * Covers dynamic dependencies: a dependsOn entry with a trailing wildcard
- * ("src*") gates a task on the base task AND on every task it spawns at
- * runtime (a ResolvableTask's children), which do not exist at store time.
+ * ("src*", "POI: *") gates a task on every other task matching the prefix —
+ * including tasks spawned at runtime (a ResolvableTask's children), which do
+ * not exist at store time. The declaring task never matches its own wildcard.
  */
 class DynamicDependenciesTest extends TestCase {
 
@@ -135,6 +136,18 @@ class DynamicDependenciesTest extends TestCase {
     }
 
 
+    public function test_parser_rejects_a_wildcard_matching_only_the_declaring_task_itself(): void {
+        $this->expectException(WorkflowTaskUnresolvedDependencyException::class);
+
+        // "POI: *" matches "POI: Aggregate" itself and nothing else — self-matches
+        // do not count, so there is no anchor to gate on.
+        $this->parser()->parse(new WorkflowDefinition('wf', [
+            new Task('unrelated', new DynamicDepsTrackedJob()),
+            new Task('POI: Aggregate', new DynamicDepsSinkJob(), dependsOn: 'POI: *'),
+        ]));
+    }
+
+
     public function test_parser_rejects_a_task_name_containing_the_reserved_wildcard_character(): void {
         $this->expectException(WorkflowTaskReservedCharacterException::class);
 
@@ -211,6 +224,68 @@ class DynamicDependenciesTest extends TestCase {
 
         $this->completeTaskAndDispatchDependants($model, 'src');
 
+        Queue::assertPushed(DynamicDepsSinkJob::class, 1);
+    }
+
+
+    // --- prefix globs across a task namespace ---
+
+    /**
+     * "POI: Schools" (static), "POI: Parcels" (resolvable) and "POI: Aggregate"
+     * gated on "POI: *" — the aggregate waits for both siblings and every task
+     * the resolvable spawns, and never matches itself.
+     *
+     * @return Workflow
+     */
+    private function dispatchNamespaceSample(): Workflow {
+        return (new WorkflowDefinition('wf', [
+            new Task('POI: Schools', new DynamicDepsTrackedJob()),
+            new ResolvableTask(
+                name: 'POI: Parcels',
+                items: fn() => ['inpost' => 'inpost', 'dpd' => 'dpd'],
+                jobs: fn($item) => new DynamicDepsTrackedJob(),
+            ),
+            new Task('POI: Aggregate', new DynamicDepsSinkJob(), dependsOn: 'POI: *'),
+        ]))->dispatch();
+    }
+
+
+    public function test_glob_gates_on_every_matching_sibling_but_not_on_itself(): void {
+        $model = $this->dispatchNamespaceSample();
+
+        $dependencyNames = $this->taskByName($model, 'POI: Aggregate')
+            ->dependencies()
+            ->pluck(WorkflowTask::ATTRIBUTE_NAME)
+            ->sort()
+            ->values()
+            ->toArray();
+
+        $this->assertSame(['POI: Parcels', 'POI: Schools'], $dependencyNames);
+    }
+
+
+    public function test_glob_dependant_waits_for_siblings_and_every_spawned_task(): void {
+        $model = $this->dispatchNamespaceSample();
+        $this->runResolver($model, 'POI: Parcels');
+
+        $dependencyNames = $this->taskByName($model, 'POI: Aggregate')
+            ->dependencies()
+            ->pluck(WorkflowTask::ATTRIBUTE_NAME)
+            ->sort()
+            ->values()
+            ->toArray();
+
+        $this->assertSame(
+            ['POI: Parcels', 'POI: Parcels:dpd', 'POI: Parcels:inpost', 'POI: Schools'],
+            $dependencyNames
+        );
+
+        $this->completeTaskAndDispatchDependants($model, 'POI: Schools');
+        $this->completeTaskAndDispatchDependants($model, 'POI: Parcels');
+        $this->completeTaskAndDispatchDependants($model, 'POI: Parcels:inpost');
+        Queue::assertNotPushed(DynamicDepsSinkJob::class);
+
+        $this->completeTaskAndDispatchDependants($model, 'POI: Parcels:dpd');
         Queue::assertPushed(DynamicDepsSinkJob::class, 1);
     }
 

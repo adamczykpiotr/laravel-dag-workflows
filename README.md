@@ -15,6 +15,7 @@ Key features:
 - Task dependencies and ordering
 - Easy dispatching and inspection via Eloquent models
 - Per-step progress reporting with built-in debounce
+- `rollbackStep()` hook to undo a failed attempt's leftovers before a retry
 - Pausable tasks for manual intervention (anomaly detection, user approval, etc.)
 - Events for workflow state changes (paused, resumed, cancelled)
 
@@ -115,6 +116,35 @@ dump($model->id);
 
 Jobs using `HasWorkflowTracking` can call `$this->progress(int $percentage)` (0–100).
 Writes are debounced against the step row's `updated_at` (30s window); `100` and `progress(..., force: true)` always write.
+
+## Rolling back failed attempts
+
+When a step is retried, the previous attempt may have left things behind — a
+downloaded file, rows from queries that already ran. Override `rollbackStep()` to
+undo them; it runs right before `handle()`, but only when a previous attempt of
+the step already ran. First attempts skip it, and the default is a no-op, so
+existing jobs are unaffected. A throwing `rollbackStep()` fails the step like a
+throwing `handle()`.
+
+```php
+use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
+
+class BuildDatasetJob implements ShouldQueue {
+    use HasWorkflowTracking;
+
+    public function rollbackStep(): void {
+        // Undo whatever the failed attempt left behind.
+        File::deleteDirectory($this->workDirectory());
+    }
+
+    public function handle(): void {
+        // ... always starts from a clean slate
+    }
+}
+```
+
+This also covers steps re-run because an *upstream* step was retried: if the
+step already ran, it rolls back first; if it never ran, it starts clean.
 
 ## Pausable Tasks
 

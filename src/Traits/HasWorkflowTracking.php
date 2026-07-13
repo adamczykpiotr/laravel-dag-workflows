@@ -27,6 +27,18 @@ trait HasWorkflowTracking {
     }
 
 
+    /**
+     * Invoked by the tracker middleware right before handle(), but only when a
+     * previous attempt of this step already ran — never on the first attempt.
+     * Override to undo whatever that attempt may have left behind (downloaded
+     * files, half-executed queries) so handle() starts from a clean slate.
+     * A throwing rollbackStep() fails the step exactly like a throwing handle().
+     */
+    public function rollbackStep(): void {
+        // default: no-op
+    }
+
+
     public function progress(int $percentage, bool $force = false): void {
         $clamped = max(0, min(100, $percentage));
         $isFirstReport = $this->workflowTaskStep->progress === null;

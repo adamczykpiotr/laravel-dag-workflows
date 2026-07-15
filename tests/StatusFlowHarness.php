@@ -22,14 +22,30 @@ use Illuminate\Support\Facades\Queue;
 class StatusFlowJob implements ShouldQueue {
     use HasWorkflowTracking, InteractsWithQueue, Queueable;
 
-    /** @var array<int, string> stepId => 'ok'|'fail'|'early' */
+    /** @var array<int, string> stepId => 'ok'|'fail'|'early'|'rollbackStep-fail' */
     public static array $behaviours = [];
 
     /** @var array<int, int> step ids in the order their handlers actually ran */
     public static array $executionLog = [];
 
+    /** @var array<int, array{step_id: int, attempts: int}> rollbackStep() invocations, in order */
+    public static array $rollbackStepLog = [];
+
     /** Guards the drain loop against re-processing the same faked job. */
     public bool $drained = false;
+
+    public function rollbackStep(): void {
+        self::$rollbackStepLog[] = [
+            'step_id' => $this->workflowTaskStep->id,
+            'attempts' => $this->workflowTaskStep->attempts,
+        ];
+
+        $behaviour = self::$behaviours[$this->workflowTaskStep->id] ?? 'ok';
+
+        if ($behaviour === 'rollbackStep-fail') {
+            throw new RuntimeException('boom in rollbackStep');
+        }
+    }
 
     public function handle(): void {
         self::$executionLog[] = $this->workflowTaskStep->id;

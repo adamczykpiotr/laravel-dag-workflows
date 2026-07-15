@@ -19,6 +19,7 @@ use Throwable;
  * @property string $class
  * @property int $order
  * @property RunStatus $status
+ * @property int $attempts
  * @property Carbon|null $started_at
  * @property Carbon|null $failed_at
  * @property Carbon|null $paused_at
@@ -43,6 +44,7 @@ class WorkflowTaskStep extends BaseModel {
     const string ATTRIBUTE_CLASS = 'class';
     const string ATTRIBUTE_ORDER = 'order';
     const string ATTRIBUTE_STATUS = 'status';
+    const string ATTRIBUTE_ATTEMPTS = 'attempts';
     const string ATTRIBUTE_STARTED_AT = 'started_at';
     const string ATTRIBUTE_FAILED_AT = 'failed_at';
     const string ATTRIBUTE_PAUSED_AT = 'paused_at';

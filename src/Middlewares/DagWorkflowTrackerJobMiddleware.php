@@ -58,6 +58,12 @@ class DagWorkflowTrackerJobMiddleware {
         }
 
         try {
+            // A previous attempt of this step already ran: let the job undo its
+            // leftovers before handle(). A throwing rollbackStep() fails the step.
+            if ($step->attempts > 1 && method_exists($job, 'rollbackStep')) {
+                $job->rollbackStep();
+            }
+
             $result = $next($job);
             $this->completeWorkflowTaskStep($step);
             return $result;
@@ -111,11 +117,12 @@ class DagWorkflowTrackerJobMiddleware {
         $claimed = WorkflowTaskStep::query()
             ->whereKey($step->id)
             ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::PENDING)
-            ->update([
+            ->increment(WorkflowTaskStep::ATTRIBUTE_ATTEMPTS, 1, [
                 WorkflowTaskStep::ATTRIBUTE_STATUS => RunStatus::RUNNING,
                 WorkflowTaskStep::ATTRIBUTE_STARTED_AT => $startedAt,
                 WorkflowTaskStep::ATTRIBUTE_FAILED_AT => null,
                 WorkflowTaskStep::ATTRIBUTE_COMPLETED_AT => null,
+                WorkflowTaskStep::ATTRIBUTE_UPDATED_AT => $startedAt,
             ]);
 
         if ($claimed === 0) {
@@ -123,7 +130,9 @@ class DagWorkflowTrackerJobMiddleware {
         }
 
         // Sync the in-memory model with the claim so later saves stay consistent.
+        // The atomic claim guarantees no concurrent increment, so +1 is exact.
         $step->status = RunStatus::RUNNING;
+        $step->attempts += 1;
         $step->started_at = $startedAt;
         $step->failed_at = null;
         $step->completed_at = null;

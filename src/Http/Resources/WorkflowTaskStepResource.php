@@ -31,6 +31,7 @@ class WorkflowTaskStepResource extends JsonResource {
             'class' => $this->class,
 
             'status' => $this->status,
+            'attempts' => $this->attempts,
             'progress' => $this->progress,
 
             'startedAt' => $this->started_at,

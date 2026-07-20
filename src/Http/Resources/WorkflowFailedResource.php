@@ -25,19 +25,7 @@ class WorkflowFailedResource extends WorkflowSummaryResource {
         $workflow = $this->resource;
 
         return [
-            'id' => $this->id,
-            'name' => $this->name,
-
-            'status' => $this->status,
-
-            'startedAt' => $this->started_at,
-            'failedAt' => $this->failed_at,
-            'completedAt' => $this->completed_at,
-
-            'durationSeconds' => $this->durationSeconds(),
-
-            'createdAt' => $this->created_at,
-            'updatedAt' => $this->updated_at,
+            ...$this->headerFields(),
 
             'failedTasks' => $workflow->tasks
                 ->map(fn(WorkflowTask $task): array => $this->failedTask($task))

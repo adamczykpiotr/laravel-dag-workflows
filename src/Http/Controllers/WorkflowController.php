@@ -8,6 +8,7 @@ use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowSummaryResource;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowEstimator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -25,17 +26,20 @@ class WorkflowController {
         $isFull = $format === self::FORMAT_FULL;
 
         $workflow = Workflow::query()
-            ->with([
-                Workflow::RELATION_TASKS => $isFull
-                    ? [WorkflowTask::RELATION_STEPS, WorkflowTask::RELATION_DEPENDENCIES, WorkflowTask::RELATION_DEPENDANTS]
-                    : [WorkflowTask::RELATION_STEPS],
-            ])
+            ->when($isFull, fn(Builder $query) => $query->with([
+                Workflow::RELATION_TASKS => [WorkflowTask::RELATION_STEPS, WorkflowTask::RELATION_DEPENDENCIES, WorkflowTask::RELATION_DEPENDANTS],
+            ]))
+            ->when(!$isFull, fn(Builder $query) => $query->with([
+                Workflow::RELATION_TASKS => [WorkflowTask::RELATION_STEPS],
+            ]))
             ->findOrFail($id);
 
-        return response()->json(match ($format) {
+        $resource = match ($format) {
             self::FORMAT_FULL => new WorkflowResource($workflow, (new WorkflowEstimator())->build($workflow)),
             self::FORMAT_FAILED => new WorkflowFailedResource($workflow),
             default => new WorkflowSummaryResource($workflow),
-        });
+        };
+
+        return response()->json($resource);
     }
 }

@@ -4,7 +4,6 @@ namespace AdamczykPiotr\DagWorkflows\Http\Resources;
 
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
-use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use Illuminate\Http\Request;
 
 /**
@@ -45,9 +44,7 @@ class WorkflowFailedResource extends WorkflowSummaryResource {
             'name' => $task->name,
             'startedAt' => $task->started_at,
             'failedAt' => $task->failed_at,
-            'steps' => $task->steps
-                ->map(fn(WorkflowTaskStep $step): WorkflowTaskStepResource => new WorkflowTaskStepResource($step))
-                ->values(),
+            'steps' => WorkflowTaskStepResource::collection($task->steps),
         ];
     }
 }

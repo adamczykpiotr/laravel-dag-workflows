@@ -222,9 +222,11 @@ no dependency wiring, no estimator:
 `SKIPPED` counts as done in the percentages (it is the terminal, non-failing
 status of steps bypassed by an early task completion), and
 `stepProgressPercentage` additionally credits running steps with their
-self-reported `progress`. Append `?format=full`
+self-reported `progress`. Append `?format=failed` for the summary plus a
+`failedTasks` list (every failed task with its failed steps), or `?format=full`
 for the previous behaviour: the complete tasks/steps tree with dependencies
-and timing estimates.
+and timing estimates. All three payloads are documented field-by-field in
+[docs/WORKFLOW_ENDPOINT.md](docs/WORKFLOW_ENDPOINT.md).
 
 ## Dynamic dependencies (waiting for a `ResolvableTask`'s spawned tasks)
 

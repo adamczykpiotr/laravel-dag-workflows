@@ -2,6 +2,7 @@
 
 namespace AdamczykPiotr\DagWorkflows\Http\Controllers;
 
+use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowFailedResource;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowResource;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowSummaryResource;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
@@ -10,13 +11,18 @@ use AdamczykPiotr\DagWorkflows\Services\WorkflowEstimator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * See docs/WORKFLOW_ENDPOINT.md for the response payloads of each format.
+ */
 class WorkflowController {
 
     public const string FORMAT_FULL = 'full';
+    public const string FORMAT_FAILED = 'failed';
 
 
     public function show(Request $request, int $id): JsonResponse {
-        $isFull = $request->query('format') === self::FORMAT_FULL;
+        $format = $request->query('format');
+        $isFull = $format === self::FORMAT_FULL;
 
         $workflow = Workflow::query()
             ->with([
@@ -26,9 +32,10 @@ class WorkflowController {
             ])
             ->findOrFail($id);
 
-        return response()->json($isFull
-            ? new WorkflowResource($workflow, (new WorkflowEstimator())->build($workflow))
-            : new WorkflowSummaryResource($workflow)
-        );
+        return response()->json(match ($format) {
+            self::FORMAT_FULL => new WorkflowResource($workflow, (new WorkflowEstimator())->build($workflow)),
+            self::FORMAT_FAILED => new WorkflowFailedResource($workflow),
+            default => new WorkflowSummaryResource($workflow),
+        });
     }
 }

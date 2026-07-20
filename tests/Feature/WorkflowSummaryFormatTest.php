@@ -145,7 +145,7 @@ class WorkflowSummaryFormatTest extends TestCase {
     }
 
 
-    public function test_format_failed_lists_only_failed_tasks_and_their_failed_steps(): void {
+    public function test_format_failed_lists_only_failed_tasks(): void {
         $payload = $this->payload($this->makeSampleWorkflow(), format: 'failed');
 
         // Only task c failed — b, a completed and d was cancelled, none of them listed.
@@ -154,10 +154,28 @@ class WorkflowSummaryFormatTest extends TestCase {
         $this->assertSame('c', $failedTask['name']);
         $this->assertNotNull($failedTask['failedAt']);
 
-        $this->assertCount(1, $failedTask['failedSteps']);
-        $failedStep = $failedTask['failedSteps'][0];
+        $this->assertCount(1, $failedTask['steps']);
+        $failedStep = $failedTask['steps'][0];
         $this->assertSame(StatusFlowJob::class, $failedStep['class']);
+        $this->assertSame(RunStatus::FAILED->value, $failedStep['status']);
         $this->assertNotNull($failedStep['failedAt']);
+    }
+
+
+    public function test_format_failed_includes_all_steps_of_a_failed_task(): void {
+        [$workflow, $tasks, $steps] = $this->buildWorkflow([
+            'a' => ['steps' => 3],
+        ]);
+        StatusFlowJob::$behaviours[$steps['a'][2]->id] = 'fail';
+
+        $this->runWorkflow($workflow);
+        $payload = $this->payload($workflow->refresh(), format: 'failed');
+
+        // Step 1 completed before step 2 failed; step 3 never ran — all three listed.
+        $statuses = collect($payload['failedTasks'][0]['steps'])->pluck('status', 'order')->toArray();
+        $this->assertSame(RunStatus::COMPLETED->value, $statuses[1]);
+        $this->assertSame(RunStatus::FAILED->value, $statuses[2]);
+        $this->assertCount(3, $statuses);
     }
 
 

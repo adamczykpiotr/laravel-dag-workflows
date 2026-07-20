@@ -8,9 +8,10 @@ use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use Illuminate\Http\Request;
 
 /**
- * Only the failed stuff: the workflow header plus a `failedTasks` list.
- * Expects the tasks relation to be eager-loaded constrained to FAILED tasks
- * with their FAILED steps ({@see \AdamczykPiotr\DagWorkflows\Http\Controllers\WorkflowController::show()}).
+ * Only the failed stuff: the workflow header plus a `failedTasks` list — every
+ * FAILED task with all of its steps. Expects the tasks relation to be
+ * eager-loaded constrained to FAILED tasks
+ * ({@see \AdamczykPiotr\DagWorkflows\Http\Controllers\WorkflowController::show()}).
  *
  * @mixin Workflow
  */
@@ -44,14 +45,16 @@ class WorkflowFailedResource extends WorkflowSummaryResource {
             'name' => $task->name,
             'startedAt' => $task->started_at,
             'failedAt' => $task->failed_at,
-            'failedSteps' => $task->steps
+            'steps' => $task->steps
                 ->map(fn(WorkflowTaskStep $step): array => [
                     'id' => $step->id,
                     'order' => $step->order,
                     'class' => $step->class,
+                    'status' => $step->status,
                     'attempts' => $step->attempts,
                     'startedAt' => $step->started_at,
                     'failedAt' => $step->failed_at,
+                    'completedAt' => $step->completed_at,
                 ])
                 ->values(),
         ];

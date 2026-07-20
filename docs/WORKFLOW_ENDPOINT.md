@@ -57,9 +57,10 @@ Cheap to serve (no dependency wiring, no estimator) — intended for polling:
 
 Only the failed stuff: the workflow header (no status counts or percentages —
 only failed tasks are even loaded from the database) plus `failedTasks`: every
-task whose status is `FAILED`, each with its `FAILED` steps. Tasks that were
-merely `CANCELLED` because an upstream dependency failed are not listed — they
-carry no failure information of their own.
+task whose status is `FAILED`, each with **all** of its steps — the step
+statuses show which ones completed before the failure and which never ran.
+Tasks that were merely `CANCELLED` because an upstream dependency failed are
+not listed — they carry no failure information of their own.
 
 ```json
 {
@@ -78,14 +79,26 @@ carry no failure information of their own.
             "name": "Import: Orders:EU",
             "startedAt": "2026-07-20T09:44:10.000000Z",
             "failedAt": "2026-07-20T09:45:52.000000Z",
-            "failedSteps": [
+            "steps": [
+                {
+                    "id": 2047,
+                    "order": 1,
+                    "class": "App\\Jobs\\FetchOrdersJob",
+                    "status": "COMPLETED",
+                    "attempts": 1,
+                    "startedAt": "2026-07-20T09:44:10.000000Z",
+                    "failedAt": null,
+                    "completedAt": "2026-07-20T09:44:41.000000Z"
+                },
                 {
                     "id": 2048,
                     "order": 2,
                     "class": "App\\Jobs\\ImportOrdersJob",
+                    "status": "FAILED",
                     "attempts": 3,
                     "startedAt": "2026-07-20T09:44:41.000000Z",
-                    "failedAt": "2026-07-20T09:45:52.000000Z"
+                    "failedAt": "2026-07-20T09:45:52.000000Z",
+                    "completedAt": null
                 }
             ]
         }

@@ -8,7 +8,6 @@ use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowResource;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowSummaryResource;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
-use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowEstimator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -36,10 +35,7 @@ class WorkflowController {
             ->when($isFailed, fn(Builder $query) => $query->with([ // @phpstan-ignore-line
                 Workflow::RELATION_TASKS => fn(HasMany $tasks) => $tasks
                     ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::FAILED) // @phpstan-ignore-line
-                    ->with([ // @phpstan-ignore-line
-                        WorkflowTask::RELATION_STEPS => fn(HasMany $steps) => $steps
-                            ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::FAILED), // @phpstan-ignore-line
-                    ]),
+                    ->with(WorkflowTask::RELATION_STEPS),
             ]))
             ->when(!$isFull && !$isFailed, fn(Builder $query) => $query->with([
                 Workflow::RELATION_TASKS => [WorkflowTask::RELATION_STEPS],

@@ -60,7 +60,9 @@ only failed tasks are even loaded from the database) plus `failedTasks`: every
 task whose status is `FAILED`, each with **all** of its steps — the step
 statuses show which ones completed before the failure and which never ran.
 Tasks that were merely `CANCELLED` because an upstream dependency failed are
-not listed — they carry no failure information of their own.
+not listed — they carry no failure information of their own. Steps use the
+same resource as `format=full`, minus the estimator fields (`durationSeconds`,
+`estimatedDurationSeconds`, `estimatedSecondsRemaining`).
 
 ```json
 {
@@ -86,9 +88,12 @@ not listed — they carry no failure information of their own.
                     "class": "App\\Jobs\\FetchOrdersJob",
                     "status": "COMPLETED",
                     "attempts": 1,
+                    "progress": 100,
                     "startedAt": "2026-07-20T09:44:10.000000Z",
                     "failedAt": null,
-                    "completedAt": "2026-07-20T09:44:41.000000Z"
+                    "completedAt": "2026-07-20T09:44:41.000000Z",
+                    "createdAt": "2026-07-20T09:41:02.000000Z",
+                    "updatedAt": "2026-07-20T09:44:41.000000Z"
                 },
                 {
                     "id": 2048,
@@ -96,9 +101,12 @@ not listed — they carry no failure information of their own.
                     "class": "App\\Jobs\\ImportOrdersJob",
                     "status": "FAILED",
                     "attempts": 3,
+                    "progress": null,
                     "startedAt": "2026-07-20T09:44:41.000000Z",
                     "failedAt": "2026-07-20T09:45:52.000000Z",
-                    "completedAt": null
+                    "completedAt": null,
+                    "createdAt": "2026-07-20T09:41:02.000000Z",
+                    "updatedAt": "2026-07-20T09:45:52.000000Z"
                 }
             ]
         }

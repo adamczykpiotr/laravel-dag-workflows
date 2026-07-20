@@ -46,16 +46,7 @@ class WorkflowFailedResource extends WorkflowSummaryResource {
             'startedAt' => $task->started_at,
             'failedAt' => $task->failed_at,
             'steps' => $task->steps
-                ->map(fn(WorkflowTaskStep $step): array => [
-                    'id' => $step->id,
-                    'order' => $step->order,
-                    'class' => $step->class,
-                    'status' => $step->status,
-                    'attempts' => $step->attempts,
-                    'startedAt' => $step->started_at,
-                    'failedAt' => $step->failed_at,
-                    'completedAt' => $step->completed_at,
-                ])
+                ->map(fn(WorkflowTaskStep $step): WorkflowTaskStepResource => new WorkflowTaskStepResource($step))
                 ->values(),
         ];
     }

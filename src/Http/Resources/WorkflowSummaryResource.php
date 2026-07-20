@@ -58,7 +58,7 @@ class WorkflowSummaryResource extends JsonResource {
     }
 
 
-    private function durationSeconds(): int {
+    protected function durationSeconds(): int {
         /** @var Workflow $workflow */
         $workflow = $this->resource;
 

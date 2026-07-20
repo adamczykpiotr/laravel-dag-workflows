@@ -2,13 +2,16 @@
 
 namespace AdamczykPiotr\DagWorkflows\Http\Controllers;
 
+use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowFailedResource;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowResource;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowSummaryResource;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
+use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowEstimator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,12 +27,21 @@ class WorkflowController {
     public function show(Request $request, int $id): JsonResponse {
         $format = $request->query('format');
         $isFull = $format === self::FORMAT_FULL;
+        $isFailed = $format === self::FORMAT_FAILED;
 
         $workflow = Workflow::query()
             ->when($isFull, fn(Builder $query) => $query->with([
                 Workflow::RELATION_TASKS => [WorkflowTask::RELATION_STEPS, WorkflowTask::RELATION_DEPENDENCIES, WorkflowTask::RELATION_DEPENDANTS],
             ]))
-            ->when(!$isFull, fn(Builder $query) => $query->with([
+            ->when($isFailed, fn(Builder $query) => $query->with([ // @phpstan-ignore-line
+                Workflow::RELATION_TASKS => fn(HasMany $tasks) => $tasks
+                    ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::FAILED) // @phpstan-ignore-line
+                    ->with([ // @phpstan-ignore-line
+                        WorkflowTask::RELATION_STEPS => fn(HasMany $steps) => $steps
+                            ->where(WorkflowTaskStep::ATTRIBUTE_STATUS, RunStatus::FAILED), // @phpstan-ignore-line
+                    ]),
+            ]))
+            ->when(!$isFull && !$isFailed, fn(Builder $query) => $query->with([
                 Workflow::RELATION_TASKS => [WorkflowTask::RELATION_STEPS],
             ]))
             ->findOrFail($id);

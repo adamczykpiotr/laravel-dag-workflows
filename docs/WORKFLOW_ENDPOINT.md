@@ -15,7 +15,7 @@ exception handling). The response shape is selected with the `format` query para
 | `format`         | Payload                                                              |
 |------------------|----------------------------------------------------------------------|
 | _(omitted)_      | Lightweight summary: status counts and completion percentages        |
-| `failed`         | The summary plus `failedTasks` — failed tasks with their failed steps |
+| `failed`         | The workflow header plus `failedTasks` — failed tasks with their failed steps |
 | `full`           | The complete tasks/steps tree with dependencies and timing estimates |
 
 Any other value falls back to the summary.
@@ -55,14 +55,23 @@ Cheap to serve (no dependency wiring, no estimator) — intended for polling:
 
 ## `?format=failed`
 
-Everything from the summary, plus `failedTasks`: every task whose status is
-`FAILED`, each with its `FAILED` steps. Tasks that were merely `CANCELLED`
-because an upstream dependency failed are not listed — they carry no failure
-information of their own (the counts in `taskStatuses` still include them).
+Only the failed stuff: the workflow header (no status counts or percentages —
+only failed tasks are even loaded from the database) plus `failedTasks`: every
+task whose status is `FAILED`, each with its `FAILED` steps. Tasks that were
+merely `CANCELLED` because an upstream dependency failed are not listed — they
+carry no failure information of their own.
 
 ```json
 {
-    "...": "all summary fields as above",
+    "id": 134,
+    "name": "Sync POIs",
+    "status": "FAILED",
+    "startedAt": "2026-07-20T09:41:03.000000Z",
+    "failedAt": "2026-07-20T09:45:52.000000Z",
+    "completedAt": null,
+    "durationSeconds": 290,
+    "createdAt": "2026-07-20T09:41:02.000000Z",
+    "updatedAt": "2026-07-20T09:45:52.000000Z",
     "failedTasks": [
         {
             "id": 512,

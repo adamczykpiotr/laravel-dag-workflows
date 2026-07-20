@@ -2,15 +2,15 @@
 
 namespace AdamczykPiotr\DagWorkflows\Http\Resources;
 
-use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use Illuminate\Http\Request;
 
 /**
- * Summary payload plus a `failedTasks` list: every FAILED task with its
- * FAILED steps, so failures can be inspected without the full tasks/steps tree.
+ * Only the failed stuff: the workflow header plus a `failedTasks` list.
+ * Expects the tasks relation to be eager-loaded constrained to FAILED tasks
+ * with their FAILED steps ({@see \AdamczykPiotr\DagWorkflows\Http\Controllers\WorkflowController::show()}).
  *
  * @mixin Workflow
  */
@@ -24,14 +24,24 @@ class WorkflowFailedResource extends WorkflowSummaryResource {
         /** @var Workflow $workflow */
         $workflow = $this->resource;
 
-        $failedTasks = $workflow->tasks
-            ->filter(fn(WorkflowTask $task): bool => $task->status === RunStatus::FAILED)
-            ->values()
-            ->map(fn(WorkflowTask $task): array => $this->failedTask($task));
-
         return [
-            ...parent::toArray($request),
-            'failedTasks' => $failedTasks,
+            'id' => $this->id,
+            'name' => $this->name,
+
+            'status' => $this->status,
+
+            'startedAt' => $this->started_at,
+            'failedAt' => $this->failed_at,
+            'completedAt' => $this->completed_at,
+
+            'durationSeconds' => $this->durationSeconds(),
+
+            'createdAt' => $this->created_at,
+            'updatedAt' => $this->updated_at,
+
+            'failedTasks' => $workflow->tasks
+                ->map(fn(WorkflowTask $task): array => $this->failedTask($task))
+                ->values(),
         ];
     }
 
@@ -41,24 +51,21 @@ class WorkflowFailedResource extends WorkflowSummaryResource {
      * @return array<string, mixed>
      */
     private function failedTask(WorkflowTask $task): array {
-        $failedSteps = $task->steps
-            ->filter(fn(WorkflowTaskStep $step): bool => $step->status === RunStatus::FAILED)
-            ->values()
-            ->map(fn(WorkflowTaskStep $step): array => [
-                'id' => $step->id,
-                'order' => $step->order,
-                'class' => $step->class,
-                'attempts' => $step->attempts,
-                'startedAt' => $step->started_at,
-                'failedAt' => $step->failed_at,
-            ]);
-
         return [
             'id' => $task->id,
             'name' => $task->name,
             'startedAt' => $task->started_at,
             'failedAt' => $task->failed_at,
-            'failedSteps' => $failedSteps,
+            'failedSteps' => $task->steps
+                ->map(fn(WorkflowTaskStep $step): array => [
+                    'id' => $step->id,
+                    'order' => $step->order,
+                    'class' => $step->class,
+                    'attempts' => $step->attempts,
+                    'startedAt' => $step->started_at,
+                    'failedAt' => $step->failed_at,
+                ])
+                ->values(),
         ];
     }
 }

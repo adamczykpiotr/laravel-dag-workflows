@@ -161,12 +161,13 @@ class WorkflowSummaryFormatTest extends TestCase {
     }
 
 
-    public function test_format_failed_keeps_the_summary_fields_but_not_the_task_tree(): void {
+    public function test_format_failed_returns_only_the_header_and_the_failed_list(): void {
         $payload = $this->payload($this->makeSampleWorkflow(), format: 'failed');
 
         $this->assertArrayNotHasKey('tasks', $payload);
-        $this->assertArrayHasKey('taskStatuses', $payload);
-        $this->assertArrayHasKey('stepProgressPercentage', $payload);
+        $this->assertArrayNotHasKey('taskStatuses', $payload);
+        $this->assertArrayNotHasKey('stepProgressPercentage', $payload);
+        $this->assertArrayHasKey('durationSeconds', $payload);
         $this->assertSame(RunStatus::FAILED->value, $payload['status']);
     }
 

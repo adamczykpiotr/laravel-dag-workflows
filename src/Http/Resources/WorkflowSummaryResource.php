@@ -34,25 +34,6 @@ class WorkflowSummaryResource extends JsonResource {
         $stepStatuses = $steps->countBy(fn(WorkflowTaskStep $step): string => $step->status->value);
 
         return [
-            ...$this->headerFields(),
-
-            'taskStatuses' => $taskStatuses,
-            'stepStatuses' => $stepStatuses,
-
-            'taskCompletionPercentage' => $this->completionPercentage($taskStatuses),
-            'stepCompletionPercentage' => $this->completionPercentage($stepStatuses),
-            'stepProgressPercentage' => $this->progressPercentage($steps),
-        ];
-    }
-
-
-    /**
-     * The workflow's own fields, shared by every format that skips the task tree.
-     *
-     * @return array<string, mixed>
-     */
-    protected function headerFields(): array {
-        return [
             'id' => $this->id,
             'name' => $this->name,
 
@@ -66,6 +47,13 @@ class WorkflowSummaryResource extends JsonResource {
 
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,
+
+            'taskStatuses' => $taskStatuses,
+            'stepStatuses' => $stepStatuses,
+
+            'taskCompletionPercentage' => $this->completionPercentage($taskStatuses),
+            'stepCompletionPercentage' => $this->completionPercentage($stepStatuses),
+            'stepProgressPercentage' => $this->progressPercentage($steps),
         ];
     }
 

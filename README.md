@@ -222,9 +222,9 @@ no dependency wiring, no estimator:
 `SKIPPED` counts as done in the percentages (it is the terminal, non-failing
 status of steps bypassed by an early task completion), and
 `stepProgressPercentage` additionally credits running steps with their
-self-reported `progress`. Append `?format=failed` for only the failed stuff —
-the workflow header plus a `failedTasks` list (every failed task with all of
-its steps, no other tasks loaded) — or `?format=full`
+self-reported `progress`. Append `?format=failed` for the full payload with
+`tasks` filtered to failed tasks only (each with all of its steps, no other
+tasks loaded), or `?format=full`
 for the previous behaviour: the complete tasks/steps tree with dependencies
 and timing estimates. All three payloads are documented field-by-field in
 [docs/WORKFLOW_ENDPOINT.md](docs/WORKFLOW_ENDPOINT.md).

@@ -3,7 +3,6 @@
 namespace AdamczykPiotr\DagWorkflows\Http\Controllers;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
-use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowFailedResource;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowResource;
 use AdamczykPiotr\DagWorkflows\Http\Resources\WorkflowSummaryResource;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
@@ -43,8 +42,7 @@ class WorkflowController {
             ->findOrFail($id);
 
         $resource = match ($format) {
-            self::FORMAT_FULL => new WorkflowResource($workflow, (new WorkflowEstimator())->build($workflow)),
-            self::FORMAT_FAILED => new WorkflowFailedResource($workflow),
+            self::FORMAT_FULL, self::FORMAT_FAILED => new WorkflowResource($workflow, (new WorkflowEstimator())->build($workflow)),
             default => new WorkflowSummaryResource($workflow),
         };
 

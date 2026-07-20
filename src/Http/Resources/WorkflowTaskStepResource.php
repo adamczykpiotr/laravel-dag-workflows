@@ -14,7 +14,7 @@ class WorkflowTaskStepResource extends JsonResource {
 
     public function __construct(
         WorkflowTaskStep $step,
-        private readonly ?WorkflowTaskStepEstimateDto $estimate = null,
+        private readonly WorkflowTaskStepEstimateDto $estimate,
     ) {
         parent::__construct($step);
     }
@@ -25,8 +25,6 @@ class WorkflowTaskStepResource extends JsonResource {
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array {
-        $estimate = $this->estimate;
-
         return [
             'id' => $this->id,
             'order' => $this->order,
@@ -40,9 +38,9 @@ class WorkflowTaskStepResource extends JsonResource {
             'failedAt' => $this->failed_at,
             'completedAt' => $this->completed_at,
 
-            'durationSeconds' => $this->when($estimate !== null, fn() => $estimate?->durationSeconds),
-            'estimatedDurationSeconds' => $this->when($estimate !== null, fn() => $estimate?->estimatedDurationSeconds),
-            'estimatedSecondsRemaining' => $this->when($estimate !== null, fn() => $estimate?->estimatedSecondsRemaining),
+            'durationSeconds' => $this->estimate->durationSeconds,
+            'estimatedDurationSeconds' => $this->estimate->estimatedDurationSeconds,
+            'estimatedSecondsRemaining' => $this->estimate->estimatedSecondsRemaining,
 
             'createdAt' => $this->created_at,
             'updatedAt' => $this->updated_at,

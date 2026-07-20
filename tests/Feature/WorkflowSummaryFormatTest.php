@@ -145,12 +145,15 @@ class WorkflowSummaryFormatTest extends TestCase {
     }
 
 
-    public function test_format_failed_lists_only_failed_tasks(): void {
+    public function test_format_failed_returns_the_full_shape_with_only_failed_tasks(): void {
         $payload = $this->payload($this->makeSampleWorkflow(), format: 'failed');
 
+        $this->assertArrayNotHasKey('taskStatuses', $payload);
+        $this->assertSame(RunStatus::FAILED->value, $payload['status']);
+
         // Only task c failed — b, a completed and d was cancelled, none of them listed.
-        $this->assertCount(1, $payload['failedTasks']);
-        $failedTask = $payload['failedTasks'][0];
+        $this->assertCount(1, $payload['tasks']);
+        $failedTask = $payload['tasks'][0];
         $this->assertSame('c', $failedTask['name']);
         $this->assertNotNull($failedTask['failedAt']);
 
@@ -172,25 +175,14 @@ class WorkflowSummaryFormatTest extends TestCase {
         $payload = $this->payload($workflow->refresh(), format: 'failed');
 
         // Step 1 completed before step 2 failed; step 3 never ran — all three listed.
-        $statuses = collect($payload['failedTasks'][0]['steps'])->pluck('status', 'order')->toArray();
+        $statuses = collect($payload['tasks'][0]['steps'])->pluck('status', 'order')->toArray();
         $this->assertSame(RunStatus::COMPLETED->value, $statuses[1]);
         $this->assertSame(RunStatus::FAILED->value, $statuses[2]);
         $this->assertCount(3, $statuses);
     }
 
 
-    public function test_format_failed_returns_only_the_header_and_the_failed_list(): void {
-        $payload = $this->payload($this->makeSampleWorkflow(), format: 'failed');
-
-        $this->assertArrayNotHasKey('tasks', $payload);
-        $this->assertArrayNotHasKey('taskStatuses', $payload);
-        $this->assertArrayNotHasKey('stepProgressPercentage', $payload);
-        $this->assertArrayHasKey('durationSeconds', $payload);
-        $this->assertSame(RunStatus::FAILED->value, $payload['status']);
-    }
-
-
-    public function test_format_failed_returns_an_empty_list_when_nothing_failed(): void {
+    public function test_format_failed_returns_no_tasks_when_nothing_failed(): void {
         [$workflow] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['deps' => ['a'], 'steps' => 1],
@@ -200,6 +192,6 @@ class WorkflowSummaryFormatTest extends TestCase {
         $payload = $this->payload($workflow->refresh(), format: 'failed');
 
         $this->assertSame(RunStatus::COMPLETED->value, $payload['status']);
-        $this->assertSame([], $payload['failedTasks']);
+        $this->assertSame([], $payload['tasks']);
     }
 }

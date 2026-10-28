@@ -31,9 +31,9 @@ class WorkflowController {
             ->when($isFull, fn(Builder $query) => $query->with([
                 Workflow::RELATION_TASKS => [WorkflowTask::RELATION_STEPS, WorkflowTask::RELATION_DEPENDENCIES, WorkflowTask::RELATION_DEPENDANTS],
             ]))
-            ->when($isFailed, fn(Builder $query) => $query->with([ // @phpstan-ignore-line
+            ->when($isFailed, fn(Builder $query) => $query->with([
                 Workflow::RELATION_TASKS => fn(HasMany $tasks) => $tasks
-                    ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::FAILED) // @phpstan-ignore-line
+                    ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::FAILED)
                     ->with(WorkflowTask::RELATION_STEPS),
             ]))
             ->when(!$isFull && !$isFailed, fn(Builder $query) => $query->with([

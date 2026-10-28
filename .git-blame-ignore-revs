@@ -1,1 +1,4 @@
 # Squash merges rewrite SHAs, so add the commit as it landed on the main branch.
+
+# style: apply laravel-ultimate-formatter (#43)
+31ad1e93c5cb0e4cb8830e85685aa6f408b62ccc

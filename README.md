@@ -2,7 +2,7 @@
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/adamczykpiotr/laravel-dag-workflows.svg?style=flat-square)](https://packagist.org/packages/adamczykpiotr/laravel-dag-workflows)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/adamczykpiotr/laravel-dag-workflows/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/adamczykpiotr/laravel-dag-workflows/actions?query=workflow%3Arun-tests+branch%3Amain)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/adamczykpiotr/laravel-dag-workflows/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/adamczykpiotr/laravel-dag-workflows/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
+[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/adamczykpiotr/laravel-dag-workflows/code-style.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/adamczykpiotr/laravel-dag-workflows/actions?query=workflow%3Acode-style+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/adamczykpiotr/laravel-dag-workflows.svg?style=flat-square)](https://packagist.org/packages/adamczykpiotr/laravel-dag-workflows)
 
 A lightweight library to define and dispatch directed acyclic graph (DAG) based workflows composed of Tasks and TaskGroups. Each Task can contain one or more jobs and may declare
@@ -270,6 +270,15 @@ Run the package and application tests:
 ```bash
 composer test
 composer analyse
+```
+
+## Code style
+
+Code is formatted with [laravel-ultimate-formatter](https://github.com/adamczykpiotr/laravel-ultimate-formatter), which runs Rector and then PHP CS Fixer:
+
+```bash
+composer format   # apply Rector and PHP CS Fixer
+composer check    # dry run, used by the code-style workflow
 ```
 
 ## Contributing

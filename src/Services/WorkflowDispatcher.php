@@ -65,7 +65,7 @@ class WorkflowDispatcher {
             ->where(WorkflowTask::ATTRIBUTE_STATUS, RunStatus::PENDING)
             ->whereDoesntHave(
                 WorkflowTask::RELATION_DEPENDENCIES,
-                fn(Builder $builder) => $builder->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED) // @phpstan-ignore-line
+                fn(Builder $builder) => $builder->where(WorkflowTask::ATTRIBUTE_STATUS, '!=', RunStatus::COMPLETED)
             )
             ->with(WorkflowTask::RELATION_INITIAL_STEP)
             ->get();

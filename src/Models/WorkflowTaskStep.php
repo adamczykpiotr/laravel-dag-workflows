@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Models;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
@@ -10,7 +12,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Throwable;
-
 
 /**
  * @property int $id
@@ -31,39 +32,40 @@ use Throwable;
  * @property Carbon|null $updated_at
  * @property-read WorkflowTaskStep|null $nextStep
  * @property-read WorkflowTask $task
+ *
  * @method static Builder<static>|WorkflowTaskStep newModelQuery()
  * @method static Builder<static>|WorkflowTaskStep newQuery()
  * @method static Builder<static>|WorkflowTaskStep query()
+ *
  * @mixin Eloquent
  */
-class WorkflowTaskStep extends BaseModel {
-
-    const string ATTRIBUTE_ID = 'id';
-    const string ATTRIBUTE_TASK_ID = 'task_id';
-    const string ATTRIBUTE_WORKFLOW_ID = 'workflow_id';
-    const string ATTRIBUTE_CLASS = 'class';
-    const string ATTRIBUTE_ORDER = 'order';
-    const string ATTRIBUTE_STATUS = 'status';
-    const string ATTRIBUTE_ATTEMPTS = 'attempts';
-    const string ATTRIBUTE_STARTED_AT = 'started_at';
-    const string ATTRIBUTE_FAILED_AT = 'failed_at';
-    const string ATTRIBUTE_PAUSED_AT = 'paused_at';
-    const string ATTRIBUTE_PAUSE_REASON = 'pause_reason';
-    const string ATTRIBUTE_COMPLETED_AT = 'completed_at';
-    const string ATTRIBUTE_PAYLOAD = 'payload';
-    const string ATTRIBUTE_PROGRESS = 'progress';
-    const string ATTRIBUTE_CREATED_AT = 'created_at';
-    const string ATTRIBUTE_UPDATED_AT = 'updated_at';
-
-    const string RELATION_TASK = 'task';
-    const string RELATION_WORKFLOW = 'workflow';
-    const string RELATION_NEXT_STEP = 'nextStep';
-
+class WorkflowTaskStep extends BaseModel
+{
+    public const string ATTRIBUTE_ID = 'id';
+    public const string ATTRIBUTE_TASK_ID = 'task_id';
+    public const string ATTRIBUTE_WORKFLOW_ID = 'workflow_id';
+    public const string ATTRIBUTE_CLASS = 'class';
+    public const string ATTRIBUTE_ORDER = 'order';
+    public const string ATTRIBUTE_STATUS = 'status';
+    public const string ATTRIBUTE_ATTEMPTS = 'attempts';
+    public const string ATTRIBUTE_STARTED_AT = 'started_at';
+    public const string ATTRIBUTE_FAILED_AT = 'failed_at';
+    public const string ATTRIBUTE_PAUSED_AT = 'paused_at';
+    public const string ATTRIBUTE_PAUSE_REASON = 'pause_reason';
+    public const string ATTRIBUTE_COMPLETED_AT = 'completed_at';
+    public const string ATTRIBUTE_PAYLOAD = 'payload';
+    public const string ATTRIBUTE_PROGRESS = 'progress';
+    public const string ATTRIBUTE_CREATED_AT = 'created_at';
+    public const string ATTRIBUTE_UPDATED_AT = 'updated_at';
+    public const string RELATION_TASK = 'task';
+    public const string RELATION_WORKFLOW = 'workflow';
+    public const string RELATION_NEXT_STEP = 'nextStep';
 
     /**
      * @return array<string, string>
      */
-    public function casts(): array {
+    public function casts(): array
+    {
         return [
             self::ATTRIBUTE_STATUS => RunStatus::class,
             self::ATTRIBUTE_STARTED_AT => 'datetime',
@@ -73,27 +75,27 @@ class WorkflowTaskStep extends BaseModel {
         ];
     }
 
-
     /**
      * @return BelongsTo<WorkflowTask, $this>
      */
-    public function task(): BelongsTo {
+    public function task(): BelongsTo
+    {
         return $this->belongsTo(WorkflowTask::class, self::ATTRIBUTE_TASK_ID);
     }
-
 
     /**
      * @return BelongsTo<Workflow, $this>
      */
-    public function workflow(): BelongsTo {
+    public function workflow(): BelongsTo
+    {
         return $this->belongsTo(Workflow::class, self::ATTRIBUTE_WORKFLOW_ID);
     }
-
 
     /**
      * @return HasOne<WorkflowTaskStep, $this>
      */
-    public function nextStep(): HasOne {
+    public function nextStep(): HasOne
+    {
         return $this->hasOne(WorkflowTaskStep::class, self::ATTRIBUTE_TASK_ID, self::ATTRIBUTE_TASK_ID)
             ->where(self::ATTRIBUTE_ORDER, $this->order + 1);
     }
@@ -106,51 +108,55 @@ class WorkflowTaskStep extends BaseModel {
 
     /**
      * @param bool $force
+     *
      * @return bool
      */
-    public function dispatch(bool $force = false): bool {
+    public function dispatch(bool $force = false): bool
+    {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         return $dispatcher->dispatchStep($this, $force);
     }
 
-
     /**
      * @return void
+     *
      * @throws Throwable
      */
-    public function retry(): void {
+    public function retry(): void
+    {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         $dispatcher->retryStep($this);
     }
 
-
     /**
      * @param string|null $reason
+     *
      * @return bool
      */
-    public function pause(?string $reason = null): bool {
+    public function pause(?string $reason = null): bool
+    {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         return $dispatcher->pauseStep($this, $reason);
     }
 
-
     /**
      * @return bool
      */
-    public function resume(): bool {
+    public function resume(): bool
+    {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         return $dispatcher->resumeStep($this);
     }
 
-
     /**
      * @return bool
      */
-    public function cancel(): bool {
+    public function cancel(): bool
+    {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         return $dispatcher->cancelStep($this);

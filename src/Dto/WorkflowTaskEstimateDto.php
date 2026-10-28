@@ -1,13 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Dto;
 
 use Illuminate\Support\Collection;
 
-readonly class WorkflowTaskEstimateDto {
-
+readonly class WorkflowTaskEstimateDto
+{
     /**
      * @param Collection<int, WorkflowTaskStepEstimateDto> $steps
+     * @param int $durationSeconds
+     * @param int $estimatedSecondsRemaining
      */
     public function __construct(
         public int $durationSeconds,

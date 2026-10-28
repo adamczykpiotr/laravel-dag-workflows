@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Services;
 
 use AdamczykPiotr\DagWorkflows\Dto\WorkflowEstimateDto;
@@ -15,9 +17,15 @@ use Carbon\CarbonInterface;
  * Produces a duration / ETA estimate from a workflow's eager-loaded tasks.steps` tree.
  * Durations span created_at → completed_at, so estimates include queue wait time.
  */
-class WorkflowEstimator {
-
-    public function build(Workflow $workflow): WorkflowEstimateDto {
+class WorkflowEstimator
+{
+    /**
+     * @param Workflow $workflow
+     *
+     * @return WorkflowEstimateDto
+     */
+    public function build(Workflow $workflow): WorkflowEstimateDto
+    {
         $classMeans = $this->computeClassMeans($workflow);
 
         return new WorkflowEstimateDto(
@@ -25,39 +33,50 @@ class WorkflowEstimator {
             estimatedSecondsRemaining: $this->workflowRemaining($workflow, $classMeans),
             estimatedCompletionAt: $this->workflowEstimatedCompletionAt($workflow, $classMeans),
             tasks: $workflow->tasks->mapWithKeys(
-                fn(WorkflowTask $task) => [$task->id => $this->buildTaskEstimate($task, $classMeans)]
+                fn(WorkflowTask $task): array => [$task->id => $this->buildTaskEstimate($task, $classMeans)]
             ),
         );
     }
 
-
     /**
      * @param array<string, float> $classMeans
+     * @param WorkflowTask $task
+     *
+     * @return WorkflowTaskEstimateDto
      */
-    private function buildTaskEstimate(WorkflowTask $task, array $classMeans): WorkflowTaskEstimateDto {
+    private function buildTaskEstimate(WorkflowTask $task, array $classMeans): WorkflowTaskEstimateDto
+    {
         return new WorkflowTaskEstimateDto(
             durationSeconds: $this->taskDuration($task),
             estimatedSecondsRemaining: $this->taskRemaining($task, $classMeans),
             steps: $task->steps->mapWithKeys(
-                fn(WorkflowTaskStep $step) => [$step->id => new WorkflowTaskStepEstimateDto(
+                fn(WorkflowTaskStep $step): array => [$step->id => new WorkflowTaskStepEstimateDto(
                     durationSeconds: $this->stepDuration($step),
-                    estimatedDurationSeconds: (int) round($classMeans[$step->class] ?? 0.0),
+                    estimatedDurationSeconds: (int)round($classMeans[$step->class] ?? 0.0),
                     estimatedSecondsRemaining: $this->stepRemaining($step, $classMeans),
                 )],
             ),
         );
     }
 
-
-    private function stepDuration(WorkflowTaskStep $step): int {
+    /**
+     * @param WorkflowTaskStep $step
+     *
+     * @return int
+     */
+    private function stepDuration(WorkflowTaskStep $step): int
+    {
         return $this->elapsedSeconds($step->created_at, $step->completed_at, $step->failed_at);
     }
 
-
     /**
      * @param array<string, float> $classMeans
+     * @param WorkflowTaskStep $step
+     *
+     * @return int
      */
-    private function stepRemaining(WorkflowTaskStep $step, array $classMeans): int {
+    private function stepRemaining(WorkflowTaskStep $step, array $classMeans): int
+    {
         if ($step->status->isTerminal()) {
             return 0;
         }
@@ -69,52 +88,71 @@ class WorkflowEstimator {
 
         $elapsed = $step->status === RunStatus::RUNNING ? $this->stepDuration($step) : 0;
 
-        return max(0, (int) round($mean - $elapsed));
+        return max(0, (int)round($mean - $elapsed));
     }
 
-
-    private function taskDuration(WorkflowTask $task): int {
+    /**
+     * @param WorkflowTask $task
+     *
+     * @return int
+     */
+    private function taskDuration(WorkflowTask $task): int
+    {
         return $this->elapsedSeconds($task->created_at, $task->completed_at, $task->failed_at);
     }
 
-
     /**
      * @param array<string, float> $classMeans
+     * @param WorkflowTask $task
+     *
+     * @return int
      */
-    private function taskRemaining(WorkflowTask $task, array $classMeans): int {
+    private function taskRemaining(WorkflowTask $task, array $classMeans): int
+    {
         if ($task->status->isTerminal()) {
             return 0;
         }
 
-        return (int) $task->steps->sum(fn(WorkflowTaskStep $step) => $this->stepRemaining($step, $classMeans));
+        return (int)$task->steps->sum(fn(WorkflowTaskStep $step): int => $this->stepRemaining($step, $classMeans));
     }
 
-
-    private function workflowDuration(Workflow $workflow): int {
+    /**
+     * @param Workflow $workflow
+     *
+     * @return int
+     */
+    private function workflowDuration(Workflow $workflow): int
+    {
         return $this->elapsedSeconds($workflow->created_at, $workflow->completed_at, $workflow->failed_at);
     }
-
 
     /**
      * Longest task remaining among unfinished tasks. Ignores DAG dependency edges
      * accurate enough for parallel tasks, loose for deep chains.
      *
      * @param array<string, float> $classMeans
+     * @param Workflow $workflow
+     *
+     * @return int
      */
-    private function workflowRemaining(Workflow $workflow, array $classMeans): int {
+    private function workflowRemaining(Workflow $workflow, array $classMeans): int
+    {
         $max = $workflow->tasks
             ->reject(fn(WorkflowTask $task) => $task->status->isTerminal())
-            ->map(fn(WorkflowTask $task) => $this->taskRemaining($task, $classMeans))
+            ->map(fn(WorkflowTask $task): int => $this->taskRemaining($task, $classMeans))
             ->max();
 
         return is_int($max) ? $max : 0;
     }
 
-
     /**
      * @param array<string, float> $classMeans
+     * @param Workflow $workflow
+     *
+     * @return CarbonInterface|null
      */
-    private function workflowEstimatedCompletionAt(Workflow $workflow, array $classMeans): ?CarbonInterface {
+    private function workflowEstimatedCompletionAt(Workflow $workflow, array $classMeans): ?CarbonInterface
+    {
         if ($workflow->status->isTerminal()) {
             return null;
         }
@@ -124,29 +162,38 @@ class WorkflowEstimator {
         return $remaining > 0 ? now()->addSeconds($remaining) : null;
     }
 
-
     /**
+     * @param Workflow $workflow
+     *
      * @return array<string, float>
      */
-    private function computeClassMeans(Workflow $workflow): array {
+    private function computeClassMeans(Workflow $workflow): array
+    {
         return $workflow->tasks
             ->flatMap(fn(WorkflowTask $task) => $task->steps)
-            ->filter(fn(WorkflowTaskStep $step) =>
+            ->filter(fn(WorkflowTaskStep $step): bool =>
                 $step->status === RunStatus::COMPLETED
                 && $step->completed_at !== null
                 && $step->created_at !== null)
             ->groupBy(WorkflowTaskStep::ATTRIBUTE_CLASS)
-            ->map(fn($samples) => (float) $samples->avg(
-                fn(WorkflowTaskStep $step) => $this->stepDuration($step)
+            ->map(fn($samples): float => (float)$samples->avg(
+                fn(WorkflowTaskStep $step): int => $this->stepDuration($step)
             ))
             ->all();
     }
 
-
-    private function elapsedSeconds(?CarbonInterface $createdAt, ?CarbonInterface $completedAt, ?CarbonInterface $failedAt): int {
+    /**
+     * @param CarbonInterface|null $createdAt
+     * @param CarbonInterface|null $completedAt
+     * @param CarbonInterface|null $failedAt
+     *
+     * @return int
+     */
+    private function elapsedSeconds(?CarbonInterface $createdAt, ?CarbonInterface $completedAt, ?CarbonInterface $failedAt): int
+    {
         $end = $completedAt ?? $failedAt ?? now();
         $start = $createdAt ?? $end;
 
-        return (int) $start->diffInSeconds($end);
+        return (int)$start->diffInSeconds($end);
     }
 }

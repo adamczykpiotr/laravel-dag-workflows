@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskEarlyCompletionException;
 use AdamczykPiotr\DagWorkflows\Middlewares\DagWorkflowTrackerJobMiddleware;
@@ -13,35 +15,53 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Queue;
 
-class EarlyCompletionTestJob implements ShouldQueue {
+class EarlyCompletionTestJob implements ShouldQueue
+{
     use HasWorkflowTracking, InteractsWithQueue, Queueable;
 
-    public function handle(): void {
+    /**
+     * @return void
+     */
+    public function handle(): void
+    {
         $this->completeTaskEarly('source unchanged');
     }
 }
 
-class EarlyTaskCompletionTest extends TestCase {
-
-    protected function setUp(): void {
+class EarlyTaskCompletionTest extends TestCase
+{
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
         Queue::fake();
     }
 
-
-    public function test_skipped_status_is_terminal(): void {
+    /**
+     * @return void
+     */
+    public function test_skipped_status_is_terminal(): void
+    {
         $this->assertTrue(RunStatus::SKIPPED->isTerminal());
     }
 
-
-    public function test_skipped_status_is_not_active_and_not_blocked(): void {
+    /**
+     * @return void
+     */
+    public function test_skipped_status_is_not_active_and_not_blocked(): void
+    {
         $this->assertFalse(RunStatus::SKIPPED->isActive());
         $this->assertFalse(RunStatus::SKIPPED->isBlocked());
     }
 
-
-    public function test_trait_method_throws_the_early_completion_exception(): void {
+    /**
+     * @return void
+     */
+    public function test_trait_method_throws_the_early_completion_exception(): void
+    {
         $job = new EarlyCompletionTestJob();
 
         $this->expectException(WorkflowTaskEarlyCompletionException::class);
@@ -50,8 +70,11 @@ class EarlyTaskCompletionTest extends TestCase {
         $job->completeTaskEarly('why not');
     }
 
-
-    public function test_completes_the_current_step_and_skips_the_remaining_steps(): void {
+    /**
+     * @return void
+     */
+    public function test_completes_the_current_step_and_skips_the_remaining_steps(): void
+    {
         $workflow = $this->makeWorkflow();
         $task = $this->makeTask($workflow);
         $step1 = $this->makeStep($task, order: 1);
@@ -69,8 +92,11 @@ class EarlyTaskCompletionTest extends TestCase {
         $this->assertNotNull($task->completed_at);
     }
 
-
-    public function test_completes_the_workflow_when_it_was_the_only_task(): void {
+    /**
+     * @return void
+     */
+    public function test_completes_the_workflow_when_it_was_the_only_task(): void
+    {
         $workflow = $this->makeWorkflow();
         $task = $this->makeTask($workflow);
         $step1 = $this->makeStep($task, order: 1);
@@ -82,8 +108,11 @@ class EarlyTaskCompletionTest extends TestCase {
         $this->assertNotNull($workflow->completed_at);
     }
 
-
-    public function test_dispatches_dependant_tasks_as_a_normal_completion_would(): void {
+    /**
+     * @return void
+     */
+    public function test_dispatches_dependant_tasks_as_a_normal_completion_would(): void
+    {
         $workflow = $this->makeWorkflow();
         $task = $this->makeTask($workflow, 'first');
         $step1 = $this->makeStep($task, order: 1);
@@ -99,8 +128,11 @@ class EarlyTaskCompletionTest extends TestCase {
         $this->assertNotSame(RunStatus::COMPLETED, $workflow->refresh()->status);
     }
 
-
-    public function test_does_not_skip_steps_of_other_tasks(): void {
+    /**
+     * @return void
+     */
+    public function test_does_not_skip_steps_of_other_tasks(): void
+    {
         $workflow = $this->makeWorkflow();
         $task = $this->makeTask($workflow, 'first');
         $step1 = $this->makeStep($task, order: 1);
@@ -113,8 +145,11 @@ class EarlyTaskCompletionTest extends TestCase {
         $this->assertSame(RunStatus::PENDING, $otherStep->refresh()->status);
     }
 
-
-    public function test_marks_a_mid_task_step_as_completed_and_only_skips_later_steps(): void {
+    /**
+     * @return void
+     */
+    public function test_marks_a_mid_task_step_as_completed_and_only_skips_later_steps(): void
+    {
         $workflow = $this->makeWorkflow();
         $task = $this->makeTask($workflow);
         $step1 = $this->makeStep($task, order: 1);
@@ -133,8 +168,11 @@ class EarlyTaskCompletionTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $task->refresh()->status);
     }
 
-
-    private function makeWorkflow(): Workflow {
+    /**
+     * @return Workflow
+     */
+    private function makeWorkflow(): Workflow
+    {
         $workflow = new Workflow();
         $workflow->name = 'etc-workflow';
         $workflow->status = RunStatus::PENDING;
@@ -143,8 +181,14 @@ class EarlyTaskCompletionTest extends TestCase {
         return $workflow;
     }
 
-
-    private function makeTask(Workflow $workflow, string $name = 'etc-task'): WorkflowTask {
+    /**
+     * @param Workflow $workflow
+     * @param string $name
+     *
+     * @return WorkflowTask
+     */
+    private function makeTask(Workflow $workflow, string $name = 'etc-task'): WorkflowTask
+    {
         $task = new WorkflowTask();
         $task->workflow_id = $workflow->id;
         $task->name = $name;
@@ -154,8 +198,14 @@ class EarlyTaskCompletionTest extends TestCase {
         return $task;
     }
 
-
-    private function makeStep(WorkflowTask $task, int $order = 1): WorkflowTaskStep {
+    /**
+     * @param WorkflowTask $task
+     * @param int $order
+     *
+     * @return WorkflowTaskStep
+     */
+    private function makeStep(WorkflowTask $task, int $order = 1): WorkflowTaskStep
+    {
         $step = new WorkflowTaskStep();
         $step->task_id = $task->id;
         $step->workflow_id = $task->workflow_id;
@@ -168,8 +218,13 @@ class EarlyTaskCompletionTest extends TestCase {
         return $step;
     }
 
-
-    private function runThroughMiddleware(WorkflowTaskStep $step): mixed {
+    /**
+     * @param WorkflowTaskStep $step
+     *
+     * @return mixed
+     */
+    private function runThroughMiddleware(WorkflowTaskStep $step): mixed
+    {
         $job = new EarlyCompletionTestJob();
         $job->workflowTaskStep = $step;
 

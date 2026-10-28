@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Jobs\ResolvableTaskResolverJob;
 use AdamczykPiotr\DagWorkflows\Middlewares\ResolvableItems\PassthroughMiddleware;
@@ -16,19 +18,27 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Laravel\SerializableClosure\SerializableClosure;
 
-class ResolverTrackedJob implements ShouldQueue {
+class ResolverTrackedJob implements ShouldQueue
+{
     use HasWorkflowTracking, InteractsWithQueue, Queueable;
+
+    /**
+     * @return void
+     */
     public function handle(): void {}
 }
 
-class ResolvableTaskResolverJobTest extends TestCase {
-
-    protected function setUp(): void {
+class ResolvableTaskResolverJobTest extends TestCase
+{
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
         config()->set('dag-workflows.resolvable_items_middleware', PassthroughMiddleware::class);
     }
-
 
     /**
      * Build a workflow with one host task/step and hand back a resolver job whose
@@ -36,8 +46,11 @@ class ResolvableTaskResolverJobTest extends TestCase {
      *
      * @param callable $items
      * @param callable $jobs
+     *
+     * @return ResolvableTaskResolverJob
      */
-    private function makeResolver(callable $items, callable $jobs): ResolvableTaskResolverJob {
+    private function makeResolver(callable $items, callable $jobs): ResolvableTaskResolverJob
+    {
         $workflow = new Workflow();
         $workflow->name = 'wf';
         $workflow->status = RunStatus::RUNNING;
@@ -69,19 +82,27 @@ class ResolvableTaskResolverJobTest extends TestCase {
         return $job;
     }
 
-
-    private function handleJob(ResolvableTaskResolverJob $job): void {
+    /**
+     * @param ResolvableTaskResolverJob $job
+     *
+     * @return void
+     */
+    private function handleJob(ResolvableTaskResolverJob $job): void
+    {
         $job->handle(
             resolve(WorkflowDefinitionParser::class),
             resolve(WorkflowRepository::class),
         );
     }
 
-
-    public function test_appends_one_task_per_resolved_item(): void {
+    /**
+     * @return void
+     */
+    public function test_appends_one_task_per_resolved_item(): void
+    {
         $job = $this->makeResolver(
-            items: fn() => ['x', 'y'],
-            jobs: fn($item) => new ResolverTrackedJob(),
+            items: fn(): array => ['x', 'y'],
+            jobs: fn($item): ResolverTrackedJob => new ResolverTrackedJob(),
         );
 
         $this->handleJob($job);
@@ -96,13 +117,16 @@ class ResolvableTaskResolverJobTest extends TestCase {
         $this->assertSame(RunStatus::PENDING, $appended->status);
     }
 
-
-    public function test_applies_the_configured_items_middleware(): void {
+    /**
+     * @return void
+     */
+    public function test_applies_the_configured_items_middleware(): void
+    {
         config()->set('dag-workflows.resolvable_items_middleware', TakeFirstMiddleware::class);
 
         $job = $this->makeResolver(
-            items: fn() => ['x', 'y', 'z'],
-            jobs: fn($item) => new ResolverTrackedJob(),
+            items: fn(): array => ['x', 'y', 'z'],
+            jobs: fn($item): ResolverTrackedJob => new ResolverTrackedJob(),
         );
 
         $this->handleJob($job);
@@ -116,11 +140,14 @@ class ResolvableTaskResolverJobTest extends TestCase {
         $this->assertSame(['resolvable:0'], $appended);
     }
 
-
-    public function test_rethrows_and_leaves_no_tasks_when_the_item_provider_fails(): void {
+    /**
+     * @return void
+     */
+    public function test_rethrows_and_leaves_no_tasks_when_the_item_provider_fails(): void
+    {
         $job = $this->makeResolver(
             items: fn() => throw new RuntimeException('provider boom'),
-            jobs: fn($item) => new ResolverTrackedJob(),
+            jobs: fn($item): ResolverTrackedJob => new ResolverTrackedJob(),
         );
 
         try {

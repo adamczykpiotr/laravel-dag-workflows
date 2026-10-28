@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Jobs;
 
 use AdamczykPiotr\DagWorkflows\Definitions\Task;
@@ -8,20 +10,16 @@ use AdamczykPiotr\DagWorkflows\Models\Workflow;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDefinitionParser;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowRepository;
 use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
-use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
+use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Laravel\SerializableClosure\SerializableClosure;
 use Throwable;
 
-class ResolvableTaskResolverJob implements ShouldQueue {
-
-    use HasWorkflowTracking, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
+class ResolvableTaskResolverJob implements ShouldQueue
+{
+    use HasWorkflowTracking, Queueable;
 
     /**
      * @param string $name
@@ -34,14 +32,14 @@ class ResolvableTaskResolverJob implements ShouldQueue {
         protected string|array $dependsOn,
         protected SerializableClosure $itemProvider,
         protected SerializableClosure $jobProvider,
-    ) {
-    }
-
+    ) {}
 
     /**
      * @param WorkflowDefinitionParser $definitionParser
      * @param WorkflowRepository $workflowRepository
+     *
      * @return void
+     *
      * @throws Throwable
      */
     public function handle(
@@ -63,7 +61,7 @@ class ResolvableTaskResolverJob implements ShouldQueue {
             $jobProvider = $this->jobProvider->getClosure();
 
             /** @var Collection<int|string, Task> $definitions */
-            $definitions = collect($items)->map(function($item, string|int $key) use ($jobProvider) {
+            $definitions = collect($items)->map(function($item, string|int $key) use ($jobProvider): Task {
                 return new Task(
                     name: "{$this->name}:{$key}",
                     jobs: $jobProvider($item),

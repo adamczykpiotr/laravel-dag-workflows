@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Middlewares\DagWorkflowTrackerJobMiddleware;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
@@ -19,22 +21,35 @@ use Illuminate\Support\Facades\Queue;
  * (default) | 'fail' | 'early').
  */
 
-class StatusFlowJob implements ShouldQueue {
+class StatusFlowJob implements ShouldQueue
+{
     use HasWorkflowTracking, InteractsWithQueue, Queueable;
 
-    /** @var array<int, string> stepId => 'ok'|'fail'|'early'|'rollbackStep-fail' */
+    /**
+     * @var array<int, string> stepId => 'ok'|'fail'|'early'|'rollbackStep-fail'
+     */
     public static array $behaviours = [];
 
-    /** @var array<int, int> step ids in the order their handlers actually ran */
+    /**
+     * @var array<int, int> step ids in the order their handlers actually ran
+     */
     public static array $executionLog = [];
 
-    /** @var array<int, array{step_id: int, attempts: int}> rollbackStep() invocations, in order */
+    /**
+     * @var array<int, array{step_id: int, attempts: int}> rollbackStep() invocations, in order
+     */
     public static array $rollbackStepLog = [];
 
-    /** Guards the drain loop against re-processing the same faked job. */
+    /**
+     * Guards the drain loop against re-processing the same faked job.
+     */
     public bool $drained = false;
 
-    public function rollbackStep(): void {
+    /**
+     * @return void
+     */
+    public function rollbackStep(): void
+    {
         self::$rollbackStepLog[] = [
             'step_id' => $this->workflowTaskStep->id,
             'attempts' => $this->workflowTaskStep->attempts,
@@ -47,7 +62,11 @@ class StatusFlowJob implements ShouldQueue {
         }
     }
 
-    public function handle(): void {
+    /**
+     * @return void
+     */
+    public function handle(): void
+    {
         self::$executionLog[] = $this->workflowTaskStep->id;
 
         $behaviour = self::$behaviours[$this->workflowTaskStep->id] ?? 'ok';
@@ -67,16 +86,18 @@ class StatusFlowJob implements ShouldQueue {
 /**
  * Shared helpers for the end-to-end status-propagation tests.
  */
-trait InteractsWithStatusFlow {
-
+trait InteractsWithStatusFlow
+{
     /**
      * Build a workflow with the given tasks, each defined as
      *   'task-name' => ['deps' => [...task names...], 'steps' => <count>]
      *
      * @param array<string, array{deps?: array<int, string>, steps?: int}> $definition
+     *
      * @return array{0: Workflow, 1: array<string, WorkflowTask>, 2: array<string, array<int, WorkflowTaskStep>>}
      */
-    protected function buildWorkflow(array $definition): array {
+    protected function buildWorkflow(array $definition): array
+    {
         $workflow = new Workflow();
         $workflow->name = 'flow';
         $workflow->status = RunStatus::PENDING;
@@ -119,12 +140,14 @@ trait InteractsWithStatusFlow {
         return [$workflow, $tasks, $steps];
     }
 
-
     /**
      * Drain the faked queue: run every dispatched StatusFlowJob through the real
      * middleware, exactly like a worker would, until no new jobs remain.
+     *
+     * @return void
      */
-    protected function drainWorkflowQueue(): void {
+    protected function drainWorkflowQueue(): void
+    {
         $middleware = resolve(DagWorkflowTrackerJobMiddleware::class);
 
         do {
@@ -146,18 +169,24 @@ trait InteractsWithStatusFlow {
         } while ($ran);
     }
 
-
-    /** Kick a workflow off from its entrypoints and run it to a standstill. */
-    protected function runWorkflow(Workflow $workflow): void {
+    /** Kick a workflow off from its entrypoints and run it to a standstill.
+     * @param Workflow $workflow
+     *
+     * @return void */
+    protected function runWorkflow(Workflow $workflow): void
+    {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         $dispatcher->dispatchWorkflow($workflow);
         $this->drainWorkflowQueue();
     }
 
-
-    /** Fetch a fresh step model (avoids stale in-memory relations before retry). */
-    protected function freshStep(WorkflowTaskStep $step): WorkflowTaskStep {
+    /** Fetch a fresh step model (avoids stale in-memory relations before retry).
+     * @param WorkflowTaskStep $step
+     *
+     * @return WorkflowTaskStep */
+    protected function freshStep(WorkflowTaskStep $step): WorkflowTaskStep
+    {
         return WorkflowTaskStep::query()->findOrFail($step->id);
     }
 }

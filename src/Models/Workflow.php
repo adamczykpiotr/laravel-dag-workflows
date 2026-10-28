@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Models;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
@@ -9,7 +11,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
-
 
 /**
  * @property int $id
@@ -24,31 +25,32 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Collection<int, WorkflowTask> $tasks
  * @property-read int|null $tasks_count
+ *
  * @method static Builder<static>|Workflow newModelQuery()
  * @method static Builder<static>|Workflow newQuery()
  * @method static Builder<static>|Workflow query()
+ *
  * @mixin Eloquent
  */
-class Workflow extends BaseModel {
-
-    const string ATTRIBUTE_ID = 'id';
-    const string ATTRIBUTE_NAME = 'name';
-    const string ATTRIBUTE_STATUS = 'status';
-    const string ATTRIBUTE_STARTED_AT = 'started_at';
-    const string ATTRIBUTE_FAILED_AT = 'failed_at';
-    const string ATTRIBUTE_PAUSED_AT = 'paused_at';
-    const string ATTRIBUTE_PAUSE_REASON = 'pause_reason';
-    const string ATTRIBUTE_COMPLETED_AT = 'completed_at';
-    const string ATTRIBUTE_CREATED_AT = 'created_at';
-    const string ATTRIBUTE_UPDATED_AT = 'updated_at';
-
-    const string RELATION_TASKS = 'tasks';
-
+class Workflow extends BaseModel
+{
+    public const string ATTRIBUTE_ID = 'id';
+    public const string ATTRIBUTE_NAME = 'name';
+    public const string ATTRIBUTE_STATUS = 'status';
+    public const string ATTRIBUTE_STARTED_AT = 'started_at';
+    public const string ATTRIBUTE_FAILED_AT = 'failed_at';
+    public const string ATTRIBUTE_PAUSED_AT = 'paused_at';
+    public const string ATTRIBUTE_PAUSE_REASON = 'pause_reason';
+    public const string ATTRIBUTE_COMPLETED_AT = 'completed_at';
+    public const string ATTRIBUTE_CREATED_AT = 'created_at';
+    public const string ATTRIBUTE_UPDATED_AT = 'updated_at';
+    public const string RELATION_TASKS = 'tasks';
 
     /**
      * @return array<string, string>
      */
-    public function casts(): array {
+    public function casts(): array
+    {
         return [
             self::ATTRIBUTE_STATUS => RunStatus::class,
             self::ATTRIBUTE_STARTED_AT => 'datetime',
@@ -58,15 +60,14 @@ class Workflow extends BaseModel {
         ];
     }
 
-
     /**
      * @return HasMany<WorkflowTask, $this>
      */
-    public function tasks(): HasMany {
+    public function tasks(): HasMany
+    {
         return $this->hasMany(WorkflowTask::class, WorkflowTask::ATTRIBUTE_WORKFLOW_ID)
             ->orderBy(WorkflowTask::ATTRIBUTE_ID);
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -74,12 +75,13 @@ class Workflow extends BaseModel {
     |--------------------------------------------------------------------------
     */
 
-
     /**
      * @param bool $force
+     *
      * @return bool
      */
-    public function dispatch(bool $force = false): bool {
+    public function dispatch(bool $force = false): bool
+    {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         return $dispatcher->dispatchWorkflow($this, $force);

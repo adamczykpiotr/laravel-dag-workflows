@@ -1,9 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Middlewares\ResolvableItems\PassthroughMiddleware;
 
 return [
-
     /*
     |--------------------------------------------------------------------------
     | Resolvable items middleware
@@ -17,5 +18,4 @@ return [
     */
 
     'resolvable_items_middleware' => PassthroughMiddleware::class,
-
 ];

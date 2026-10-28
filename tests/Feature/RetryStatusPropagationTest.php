@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Tests\TestCase;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 
 /**
@@ -17,26 +19,32 @@ use Illuminate\Support\Facades\Queue;
  * The reported bug: after a retry the task completes but the workflow never
  * leaves RUNNING.
  */
-class RetryStatusPropagationTest extends TestCase {
-
+class RetryStatusPropagationTest extends TestCase
+{
     use InteractsWithStatusFlow;
 
-    protected function setUp(): void {
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
-        Carbon::setTestNow('2026-07-06 12:00:00');
+        Date::setTestNow('2026-07-06 12:00:00');
         Queue::fake();
         StatusFlowJob::$behaviours = [];
     }
 
-
-    protected function tearDown(): void {
-        Carbon::setTestNow();
+    /**
+     * @return void
+     */
+    protected function tearDown(): void
+    {
+        Date::setTestNow();
         StatusFlowJob::$behaviours = [];
 
         parent::tearDown();
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -44,8 +52,11 @@ class RetryStatusPropagationTest extends TestCase {
     |--------------------------------------------------------------------------
     */
 
-
-    public function test_retries_a_mid_task_step_in_a_single_task(): void {
+    /**
+     * @return void
+     */
+    public function test_retries_a_mid_task_step_in_a_single_task(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 3],
         ]);
@@ -65,8 +76,11 @@ class RetryStatusPropagationTest extends TestCase {
         $this->assertNotNull($workflow->completed_at);
     }
 
-
-    public function test_retries_the_first_step_of_a_single_task(): void {
+    /**
+     * @return void
+     */
+    public function test_retries_the_first_step_of_a_single_task(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 2],
         ]);
@@ -82,8 +96,11 @@ class RetryStatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
     }
 
-
-    public function test_retries_a_failed_task_that_has_a_downstream_dependant(): void {
+    /**
+     * @return void
+     */
+    public function test_retries_a_failed_task_that_has_a_downstream_dependant(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 2],
             'b' => ['deps' => ['a'], 'steps' => 1],
@@ -103,8 +120,11 @@ class RetryStatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
     }
 
-
-    public function test_retries_a_failed_downstream_task_when_upstream_already_completed(): void {
+    /**
+     * @return void
+     */
+    public function test_retries_a_failed_downstream_task_when_upstream_already_completed(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['deps' => ['a'], 'steps' => 2],
@@ -123,8 +143,11 @@ class RetryStatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
     }
 
-
-    public function test_retries_a_failed_branch_of_a_diamond(): void {
+    /**
+     * @return void
+     */
+    public function test_retries_a_failed_branch_of_a_diamond(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['deps' => ['a'], 'steps' => 1],
@@ -147,15 +170,17 @@ class RetryStatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | Retry always leaves the workflow in a consistent state
     |--------------------------------------------------------------------------
     */
 
-
-    public function test_does_not_leave_the_workflow_running_with_a_sibling_still_failed(): void {
+    /**
+     * @return void
+     */
+    public function test_does_not_leave_the_workflow_running_with_a_sibling_still_failed(): void
+    {
         // Two independent branches both fail; the user retries only one of them.
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
@@ -178,8 +203,11 @@ class RetryStatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::FAILED, $workflow->refresh()->status);
     }
 
-
-    public function test_completes_the_workflow_after_retrying_both_failed_branches(): void {
+    /**
+     * @return void
+     */
+    public function test_completes_the_workflow_after_retrying_both_failed_branches(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['steps' => 1],

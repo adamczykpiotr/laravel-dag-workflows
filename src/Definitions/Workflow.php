@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Definitions;
 
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskCircularDependencyException;
@@ -12,8 +14,8 @@ use AdamczykPiotr\DagWorkflows\Services\WorkflowDefinitionParser;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowRepository;
 use Throwable;
 
-class Workflow {
-
+class Workflow
+{
     /**
      * @param string $name
      * @param array<int, Task|ResolvableTask|TaskGroup> $tasks
@@ -21,12 +23,11 @@ class Workflow {
     public function __construct(
         public string $name,
         public array $tasks,
-    ) {
-    }
-
+    ) {}
 
     /**
      * @return WorkflowModel
+     *
      * @throws WorkflowTaskCircularDependencyException
      * @throws WorkflowTaskMissingTrackingTraitException
      * @throws WorkflowTaskUnresolvedDependencyException
@@ -34,7 +35,8 @@ class Workflow {
      * @throws WorkflowTaskDuplicateNameException
      * @throws Throwable
      */
-    public function dispatch(): WorkflowModel {
+    public function dispatch(): WorkflowModel
+    {
         /** @var WorkflowDefinitionParser $parser */
         $parser = resolve(WorkflowDefinitionParser::class);
         $workflow = $parser->parse($this);

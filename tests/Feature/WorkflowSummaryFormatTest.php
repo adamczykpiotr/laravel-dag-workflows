@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Http\Controllers\WorkflowController;
 use AdamczykPiotr\DagWorkflows\Models\Workflow;
@@ -12,44 +14,52 @@ use Illuminate\Support\Facades\Queue;
  * completion percentages, no tasks/steps tree); ?format=full returns the full
  * resource exactly as before.
  */
-class WorkflowSummaryFormatTest extends TestCase {
-
+class WorkflowSummaryFormatTest extends TestCase
+{
     use InteractsWithStatusFlow;
 
-    protected function setUp(): void {
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
         Queue::fake();
         StatusFlowJob::$behaviours = [];
     }
 
-
-    protected function tearDown(): void {
+    /**
+     * @return void
+     */
+    protected function tearDown(): void
+    {
         StatusFlowJob::$behaviours = [];
 
         parent::tearDown();
     }
 
-
     /**
      * @param Workflow $workflow
      * @param string|null $format
+     *
      * @return array<string, mixed>
      */
-    private function payload(Workflow $workflow, ?string $format = null): array {
+    private function payload(Workflow $workflow, ?string $format = null): array
+    {
         $uri = "/workflows/{$workflow->id}" . ($format !== null ? "?format={$format}" : '');
         $response = (new WorkflowController())->show(Request::create($uri), $workflow->id);
 
         return json_decode($response->getContent(), true);
     }
 
-
     /**
      * Diamond with mixed progress: b/c done, d never released because c failed.
      *
      * @return Workflow
      */
-    private function makeSampleWorkflow(): Workflow {
+    private function makeSampleWorkflow(): Workflow
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 2],
             'b' => ['deps' => ['a'], 'steps' => 1],
@@ -63,8 +73,11 @@ class WorkflowSummaryFormatTest extends TestCase {
         return $workflow->refresh();
     }
 
-
-    public function test_defaults_to_the_summary_payload_without_the_task_tree(): void {
+    /**
+     * @return void
+     */
+    public function test_defaults_to_the_summary_payload_without_the_task_tree(): void
+    {
         $payload = $this->payload($this->makeSampleWorkflow());
 
         $this->assertArrayNotHasKey('tasks', $payload);
@@ -72,8 +85,11 @@ class WorkflowSummaryFormatTest extends TestCase {
         $this->assertArrayHasKey('durationSeconds', $payload);
     }
 
-
-    public function test_summary_counts_task_and_step_statuses(): void {
+    /**
+     * @return void
+     */
+    public function test_summary_counts_task_and_step_statuses(): void
+    {
         $payload = $this->payload($this->makeSampleWorkflow());
 
         // a, b completed; c failed; d cancelled (dependant of the failed branch).
@@ -89,16 +105,22 @@ class WorkflowSummaryFormatTest extends TestCase {
         );
     }
 
-
-    public function test_summary_reports_completion_percentages(): void {
+    /**
+     * @return void
+     */
+    public function test_summary_reports_completion_percentages(): void
+    {
         $payload = $this->payload($this->makeSampleWorkflow());
 
-        $this->assertSame(50.0, (float) $payload['taskCompletionPercentage']);  // 2 of 4
-        $this->assertSame(60.0, (float) $payload['stepCompletionPercentage']);  // 3 of 5
+        $this->assertSame(50.0, (float)$payload['taskCompletionPercentage']);  // 2 of 4
+        $this->assertSame(60.0, (float)$payload['stepCompletionPercentage']);  // 3 of 5
     }
 
-
-    public function test_skipped_steps_count_as_done_in_the_percentage(): void {
+    /**
+     * @return void
+     */
+    public function test_skipped_steps_count_as_done_in_the_percentage(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 4],
         ]);
@@ -108,12 +130,15 @@ class WorkflowSummaryFormatTest extends TestCase {
         $payload = $this->payload($workflow->refresh());
 
         // 2 completed + 2 skipped by the early completion = fully done.
-        $this->assertSame(100.0, (float) $payload['stepCompletionPercentage']);
-        $this->assertSame(100.0, (float) $payload['taskCompletionPercentage']);
+        $this->assertSame(100.0, (float)$payload['stepCompletionPercentage']);
+        $this->assertSame(100.0, (float)$payload['taskCompletionPercentage']);
     }
 
-
-    public function test_step_progress_percentage_credits_running_steps_fractionally(): void {
+    /**
+     * @return void
+     */
+    public function test_step_progress_percentage_credits_running_steps_fractionally(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['steps' => 1],
@@ -132,11 +157,14 @@ class WorkflowSummaryFormatTest extends TestCase {
         $payload = $this->payload($workflow);
 
         // (100 + 50 + 0 + 0) / 4
-        $this->assertSame(37.5, (float) $payload['stepProgressPercentage']);
+        $this->assertSame(37.5, (float)$payload['stepProgressPercentage']);
     }
 
-
-    public function test_format_full_returns_the_task_tree(): void {
+    /**
+     * @return void
+     */
+    public function test_format_full_returns_the_task_tree(): void
+    {
         $payload = $this->payload($this->makeSampleWorkflow(), format: 'full');
 
         $this->assertArrayHasKey('tasks', $payload);
@@ -144,8 +172,11 @@ class WorkflowSummaryFormatTest extends TestCase {
         $this->assertArrayNotHasKey('taskStatuses', $payload);
     }
 
-
-    public function test_format_failed_returns_the_full_shape_with_only_failed_tasks(): void {
+    /**
+     * @return void
+     */
+    public function test_format_failed_returns_the_full_shape_with_only_failed_tasks(): void
+    {
         $payload = $this->payload($this->makeSampleWorkflow(), format: 'failed');
 
         $this->assertArrayNotHasKey('taskStatuses', $payload);
@@ -164,8 +195,11 @@ class WorkflowSummaryFormatTest extends TestCase {
         $this->assertNotNull($failedStep['failedAt']);
     }
 
-
-    public function test_format_failed_includes_all_steps_of_a_failed_task(): void {
+    /**
+     * @return void
+     */
+    public function test_format_failed_includes_all_steps_of_a_failed_task(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 3],
         ]);
@@ -181,8 +215,11 @@ class WorkflowSummaryFormatTest extends TestCase {
         $this->assertCount(3, $statuses);
     }
 
-
-    public function test_format_failed_returns_no_tasks_when_nothing_failed(): void {
+    /**
+     * @return void
+     */
+    public function test_format_failed_returns_no_tasks_when_nothing_failed(): void
+    {
         [$workflow] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['deps' => ['a'], 'steps' => 1],

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Services;
 
 use Illuminate\Support\Str;
@@ -15,38 +17,41 @@ use Illuminate\Support\Str;
  *
  * "*" is reserved for this syntax and must not appear in task names.
  */
-class DynamicDependenciesService {
-
+class DynamicDependenciesService
+{
     public const string RESERVED_CHARACTER = '*';
-
 
     /**
      * @param string $dependencyName
+     *
      * @return bool
      */
-    public function isDynamic(string $dependencyName): bool {
+    public function isDynamic(string $dependencyName): bool
+    {
         return Str::endsWith($dependencyName, self::RESERVED_CHARACTER);
     }
-
 
     /**
      * The task name prefix a dynamic dependency matches against.
      *
      * @param string $dependencyName
+     *
      * @return string
      */
-    public function prefix(string $dependencyName): string {
+    public function prefix(string $dependencyName): string
+    {
         return Str::substr($dependencyName, 0, -Str::length(self::RESERVED_CHARACTER));
     }
-
 
     /**
      * @param string $dependencyName
      * @param string $taskName
      * @param string $declaringTaskName
+     *
      * @return bool
      */
-    public function matches(string $dependencyName, string $taskName, string $declaringTaskName): bool {
+    public function matches(string $dependencyName, string $taskName, string $declaringTaskName): bool
+    {
         return $taskName !== $declaringTaskName
             && Str::startsWith($taskName, $this->prefix($dependencyName));
     }

@@ -1,9 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Exceptions;
 
 use Exception;
 
-class WorkflowTaskMissingTrackingTraitException extends Exception {
-
-}
+class WorkflowTaskMissingTrackingTraitException extends Exception {}

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Exceptions;
 
 use Exception;
@@ -11,6 +13,4 @@ use Exception;
  * skips all remaining steps of the task, and completes the task as if every
  * step had run. Never treated as a failure.
  */
-class WorkflowTaskEarlyCompletionException extends Exception {
-
-}
+class WorkflowTaskEarlyCompletionException extends Exception {}

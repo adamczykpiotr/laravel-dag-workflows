@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Http\Controllers;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
@@ -16,13 +18,19 @@ use Illuminate\Http\Request;
 /**
  * See docs/WORKFLOW_ENDPOINT.md for the response payloads of each format.
  */
-class WorkflowController {
-
+class WorkflowController
+{
     public const string FORMAT_FULL = 'full';
     public const string FORMAT_FAILED = 'failed';
 
-
-    public function show(Request $request, int $id): JsonResponse {
+    /**
+     * @param Request $request
+     * @param int $id
+     *
+     * @return JsonResponse
+     */
+    public function show(Request $request, int $id): JsonResponse
+    {
         $format = $request->query('format');
         $isFull = $format === self::FORMAT_FULL;
         $isFailed = $format === self::FORMAT_FAILED;

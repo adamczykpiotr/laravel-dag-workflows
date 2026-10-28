@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Services;
 
 use AdamczykPiotr\DagWorkflows\Definitions\ResolvableTask;
@@ -17,24 +19,23 @@ use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskUnresolvedDependencyExcept
 use AdamczykPiotr\DagWorkflows\Exceptions\WorkflowTaskWithoutJobException;
 use AdamczykPiotr\DagWorkflows\Jobs\ResolvableTaskResolverJob;
 use AdamczykPiotr\DagWorkflows\Traits\HasWorkflowTracking;
-use Closure;
 use Illuminate\Support\Collection;
 use Laravel\SerializableClosure\SerializableClosure;
 
-class WorkflowDefinitionParser {
-
+class WorkflowDefinitionParser
+{
     /**
      * @param DynamicDependenciesService $dynamicDependencies
      */
     public function __construct(
         protected DynamicDependenciesService $dynamicDependencies,
-    ) {
-    }
-
+    ) {}
 
     /**
      * @param Workflow $definition
+     *
      * @return WorkflowDto
+     *
      * @throws WorkflowTaskMissingTrackingTraitException
      * @throws WorkflowTaskWithoutJobException
      * @throws WorkflowTaskUnresolvedDependencyException
@@ -42,11 +43,12 @@ class WorkflowDefinitionParser {
      * @throws WorkflowTaskDuplicateNameException
      * @throws WorkflowTaskReservedCharacterException
      */
-    public function parse(Workflow $definition): WorkflowDto {
+    public function parse(Workflow $definition): WorkflowDto
+    {
         /** @var Collection<int, TaskDto> $tasks */
         $tasks = collect($definition->tasks)
-            ->filter(fn(mixed $task) => $task instanceof Task || $task instanceof ResolvableTask || $task instanceof TaskGroup) // @phpstan-ignore-line
-            ->map(fn(Task|ResolvableTask|TaskGroup $task) => match ($task::class) {
+            ->filter(fn(mixed $task): bool => $task instanceof Task || $task instanceof ResolvableTask || $task instanceof TaskGroup) // @phpstan-ignore-line
+            ->map(fn(Task|ResolvableTask|TaskGroup $task): Collection|TaskDto|array => match ($task::class) {
                 TaskGroup::class => $this->parseTaskGroup($task),
                 Task::class => $this->parseTask($task),
                 ResolvableTask::class => $this->parseResolvableTask($task),
@@ -64,59 +66,65 @@ class WorkflowDefinitionParser {
         );
     }
 
-
     /**
      * @param Collection<int, Task> $tasks
+     *
      * @return Collection<int, TaskDto>
      */
-    public function parseTasksFromResolvable(Collection $tasks): Collection {
-        return $tasks->map(fn(Task $task) => $this->parseTask($task));
+    public function parseTasksFromResolvable(Collection $tasks): Collection
+    {
+        return $tasks->map(fn(Task $task): TaskDto => $this->parseTask($task));
     }
-
 
     /**
      * @param TaskGroup $definition
+     *
      * @return Collection<int, TaskDto>
+     *
      * @throws WorkflowTaskMissingTrackingTraitException
      * @throws WorkflowTaskWithoutJobException
      */
-    protected function parseTaskGroup(TaskGroup $definition): Collection {
+    protected function parseTaskGroup(TaskGroup $definition): Collection
+    {
         $tasks = Collection::wrap($definition->tasks)
-            ->filter(fn($task) => $task instanceof Task || $task instanceof ResolvableTask) // @phpstan-ignore-line
+            ->filter(fn($task): bool => $task instanceof Task || $task instanceof ResolvableTask) // @phpstan-ignore-line
             ->values();
 
         // Merge dependencies
-        $tasks = $tasks->map(function(Task|ResolvableTask $task) use ($definition) {
+        $tasks = $tasks->map(function(Task|ResolvableTask $task) use ($definition): Task|ResolvableTask {
             /** @var array<int, string> $dependencies */
             $dependencies = Collection::wrap($task->dependsOn)
                 ->merge(Collection::wrap($definition->dependsOn))
                 ->unique()
                 ->values()
-                ->toArray();
+                ->all();
 
             $task->dependsOn = $dependencies;
             return $task;
         });
 
-        return $tasks->map(fn(Task|ResolvableTask $task) => $task instanceof Task
+        return $tasks->map(
+            fn(Task|ResolvableTask $task): TaskDto => $task instanceof Task
             ? $this->parseTask($task)
             : $this->parseResolvableTask($task)
         );
     }
 
-
     /**
      * @param Task $definition
+     *
      * @return TaskDto
+     *
      * @throws WorkflowTaskMissingTrackingTraitException
      * @throws WorkflowTaskWithoutJobException
      * @throws WorkflowTaskReservedCharacterException
      */
-    protected function parseTask(Task $definition): TaskDto {
+    protected function parseTask(Task $definition): TaskDto
+    {
         $this->guardReservedCharacters($definition->name);
 
         $jobs = Collection::wrap($definition->jobs)
-            ->filter(fn($job) => is_object($job))  // @phpstan-ignore-line
+            ->filter(fn($job): true => is_object($job))  // @phpstan-ignore-line
             ->values();
 
         if ($jobs->isEmpty()) {
@@ -136,18 +144,20 @@ class WorkflowDefinitionParser {
 
         return new TaskDto(
             name: $definition->name,
-            steps: $jobs->map(fn(object $job, int $index) => new TaskStepDto($index + 1, $job)),
+            steps: $jobs->map(fn(object $job, int $index): TaskStepDto => new TaskStepDto($index + 1, $job)),
             dependsOn: Collection::wrap($definition->dependsOn)->values()
         );
     }
 
-
     /**
      * @param ResolvableTask $definition
+     *
      * @return TaskDto
+     *
      * @throws WorkflowTaskReservedCharacterException
      */
-    private function parseResolvableTask(ResolvableTask $definition): TaskDto {
+    private function parseResolvableTask(ResolvableTask $definition): TaskDto
+    {
         $this->guardReservedCharacters($definition->name);
 
         $dependsOn = Collection::wrap($definition->dependsOn)->values();
@@ -174,16 +184,18 @@ class WorkflowDefinitionParser {
         );
     }
 
-
     /**
      * "*" is reserved for the dynamic dependency syntax ("Task name*") and would
      * make such dependency declarations ambiguous if allowed in task names.
      *
      * @param string $taskName
+     *
      * @return void
+     *
      * @throws WorkflowTaskReservedCharacterException
      */
-    protected function guardReservedCharacters(string $taskName): void {
+    protected function guardReservedCharacters(string $taskName): void
+    {
         if (str_contains($taskName, DynamicDependenciesService::RESERVED_CHARACTER)) {
             throw new WorkflowTaskReservedCharacterException(
                 "Task name {$taskName} contains the reserved character " . DynamicDependenciesService::RESERVED_CHARACTER . '.'
@@ -191,26 +203,28 @@ class WorkflowDefinitionParser {
         }
     }
 
-
     /**
      * @param Collection<int, TaskDto> $tasks
+     *
      * @return void
+     *
      * @throws WorkflowTaskCircularDependencyException
      */
-    protected function validateCircularDependencies(Collection $tasks): void {
-        $namedTasks = $tasks->keyBy(fn(TaskDto $task) => $task->name);
+    protected function validateCircularDependencies(Collection $tasks): void
+    {
+        $namedTasks = $tasks->keyBy(fn(TaskDto $task): string => $task->name);
 
         $visited = collect();
         $recursionStack = collect();
 
-        $checkForCycles = function(string $taskName) use (&$checkForCycles, $namedTasks, $visited, $recursionStack) {
+        $checkForCycles = function(string $taskName) use (&$checkForCycles, $namedTasks, $visited, $recursionStack): void {
             if ($visited->has($taskName)) {
                 return;
             }
 
             if ($recursionStack->has($taskName)) {
                 $cyclePath = $recursionStack->keys()
-                    ->skipUntil(fn($name) => $name === $taskName)
+                    ->skipUntil(fn($name): bool => $name === $taskName)
                     ->push($taskName);
 
                 throw new WorkflowTaskCircularDependencyException(
@@ -223,7 +237,7 @@ class WorkflowDefinitionParser {
             $dependencies = $namedTasks->get($taskName)->dependsOn ?? collect();
             $dependencies
                 ->flatMap(fn(string $dependency) => $this->dynamicDependencies->isDynamic($dependency)
-                    ? $namedTasks->keys()->filter(fn(string $name) => $this->dynamicDependencies->matches($dependency, $name, $taskName))
+                    ? $namedTasks->keys()->filter(fn(string $name): bool => $this->dynamicDependencies->matches($dependency, $name, $taskName))
                     : collect([$dependency]))
                 ->each(fn(string $dependency) => $checkForCycles($dependency));
 
@@ -234,19 +248,21 @@ class WorkflowDefinitionParser {
         $namedTasks->keys()->each($checkForCycles);
     }
 
-
     /**
      * @param Collection<int, TaskDto> $tasks
+     *
      * @return void
+     *
      * @throws WorkflowTaskUnresolvedDependencyException
      * @throws WorkflowTaskDuplicateNameException
      */
-    protected function validateUnresolvedDependencies(Collection $tasks): void {
-        $namedTasks = $tasks->keyBy(fn(TaskDto $task) => $task->name);
+    protected function validateUnresolvedDependencies(Collection $tasks): void
+    {
+        $namedTasks = $tasks->keyBy(fn(TaskDto $task): string => $task->name);
 
         if ($namedTasks->count() !== $tasks->count()) {
-            $duplicate = $tasks->groupBy(fn(TaskDto $task) => $task->name)
-                ->filter(fn(Collection $group) => $group->count() > 1)
+            $duplicate = $tasks->groupBy(fn(TaskDto $task): string => $task->name)
+                ->filter(fn(Collection $group): bool => $group->count() > 1)
                 ->keys()
                 ->implode(', ');
 
@@ -263,7 +279,7 @@ class WorkflowDefinitionParser {
                 // until runtime-spawned matches have been wired in.
                 if ($this->dynamicDependencies->isDynamic($dependency)) {
                     $hasMatch = $namedTasks->keys()
-                        ->contains(fn(string $name) => $this->dynamicDependencies->matches($dependency, $name, $task->name));
+                        ->contains(fn(string $name): bool => $this->dynamicDependencies->matches($dependency, $name, $task->name));
 
                     if ($hasMatch === false) {
                         throw new WorkflowTaskUnresolvedDependencyException(
@@ -283,13 +299,14 @@ class WorkflowDefinitionParser {
         }
     }
 
-
     /**
      * @param object|class-string $class
      * @param class-string $trait
+     *
      * @return bool
      */
-    protected function usesTrait(object|string $class, string $trait): bool {
+    protected function usesTrait(object|string $class, string $trait): bool
+    {
         while (true) {
             $traits = class_uses($class);
 

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Definitions\ResolvableTask;
 use AdamczykPiotr\DagWorkflows\Definitions\Task;
 use AdamczykPiotr\DagWorkflows\Definitions\Workflow as WorkflowDefinition;
@@ -21,15 +23,25 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Queue;
 
-class DynamicDepsTrackedJob implements ShouldQueue {
+class DynamicDepsTrackedJob implements ShouldQueue
+{
     use HasWorkflowTracking, InteractsWithQueue, Queueable;
+
+    /**
+     * @return void
+     */
     public function handle(): void {}
 }
 
 // Distinct class for the dynamically-dependant task so queue assertions can
 // tell it apart from the jobs of the spawned tasks.
-class DynamicDepsSinkJob implements ShouldQueue {
+class DynamicDepsSinkJob implements ShouldQueue
+{
     use HasWorkflowTracking, InteractsWithQueue, Queueable;
+
+    /**
+     * @return void
+     */
     public function handle(): void {}
 }
 
@@ -39,51 +51,67 @@ class DynamicDepsSinkJob implements ShouldQueue {
  * including tasks spawned at runtime (a ResolvableTask's children), which do
  * not exist at store time. The declaring task never matches its own wildcard.
  */
-class DynamicDependenciesTest extends TestCase {
-
-    protected function setUp(): void {
+class DynamicDependenciesTest extends TestCase
+{
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
         config()->set('dag-workflows.resolvable_items_middleware', PassthroughMiddleware::class);
         Queue::fake();
     }
 
-
-    private function parser(): WorkflowDefinitionParser {
+    /**
+     * @return WorkflowDefinitionParser
+     */
+    private function parser(): WorkflowDefinitionParser
+    {
         return resolve(WorkflowDefinitionParser::class);
     }
 
-
-    private function dispatcher(): WorkflowDispatcher {
+    /**
+     * @return WorkflowDispatcher
+     */
+    private function dispatcher(): WorkflowDispatcher
+    {
         return resolve(WorkflowDispatcher::class);
     }
-
 
     /**
      * Resolvable task "src" spawning one child per item, and a "sink" task that
      * dynamically depends on it.
      *
      * @param callable|null $items
+     *
      * @return Workflow
      */
-    private function dispatchSample(?callable $items = null): Workflow {
-        $items ??= fn() => ['x' => 'x', 'y' => 'y'];
+    private function dispatchSample(?callable $items = null): Workflow
+    {
+        $items ??= fn(): array => ['x' => 'x', 'y' => 'y'];
 
         return (new WorkflowDefinition('wf', [
             new ResolvableTask(
                 name: 'src',
                 items: $items,
-                jobs: fn($item) => new DynamicDepsTrackedJob(),
+                jobs: fn($item): DynamicDepsTrackedJob => new DynamicDepsTrackedJob(),
             ),
             new Task('sink', new DynamicDepsSinkJob(), dependsOn: 'src*'),
         ]))->dispatch();
     }
 
-
-    private function taskByName(Workflow $model, string $name): WorkflowTask {
+    /**
+     * @param Workflow $model
+     * @param string $name
+     *
+     * @return WorkflowTask
+     */
+    private function taskByName(Workflow $model, string $name): WorkflowTask
+    {
         return $model->tasks()->where(WorkflowTask::ATTRIBUTE_NAME, $name)->firstOrFail();
     }
-
 
     /**
      * Run a resolvable task's resolver the way a queue worker would: from its
@@ -91,8 +119,11 @@ class DynamicDependenciesTest extends TestCase {
      *
      * @param Workflow $model
      * @param string $taskName
+     *
+     * @return void
      */
-    private function runResolver(Workflow $model, string $taskName): void {
+    private function runResolver(Workflow $model, string $taskName): void
+    {
         $step = $this->taskByName($model, $taskName)->initialStep;
 
         /** @var ResolvableTaskResolverJob $job */
@@ -102,8 +133,14 @@ class DynamicDependenciesTest extends TestCase {
         $job->handle($this->parser(), resolve(WorkflowRepository::class));
     }
 
-
-    private function completeTaskAndDispatchDependants(Workflow $model, string $taskName): void {
+    /**
+     * @param Workflow $model
+     * @param string $taskName
+     *
+     * @return void
+     */
+    private function completeTaskAndDispatchDependants(Workflow $model, string $taskName): void
+    {
         $task = $this->taskByName($model, $taskName);
         $task->status = RunStatus::COMPLETED;
         $task->completed_at = now();
@@ -112,10 +149,13 @@ class DynamicDependenciesTest extends TestCase {
         $this->dispatcher()->dispatchDependantTasks($task);
     }
 
-
     // --- parsing ---
 
-    public function test_parser_rejects_a_dynamic_dependency_whose_base_task_does_not_exist(): void {
+    /**
+     * @return void
+     */
+    public function test_parser_rejects_a_dynamic_dependency_whose_base_task_does_not_exist(): void
+    {
         $this->expectException(WorkflowTaskUnresolvedDependencyException::class);
 
         $this->parser()->parse(new WorkflowDefinition('wf', [
@@ -124,19 +164,25 @@ class DynamicDependenciesTest extends TestCase {
         ]));
     }
 
-
-    public function test_parser_accepts_a_dynamic_dependency_on_an_existing_task(): void {
+    /**
+     * @return void
+     */
+    public function test_parser_accepts_a_dynamic_dependency_on_an_existing_task(): void
+    {
         $dto = $this->parser()->parse(new WorkflowDefinition('wf', [
-            new ResolvableTask('src', items: fn() => [], jobs: fn($item) => new DynamicDepsTrackedJob()),
+            new ResolvableTask('src', items: fn(): array => [], jobs: fn($item): DynamicDepsTrackedJob => new DynamicDepsTrackedJob()),
             new Task('sink', new DynamicDepsSinkJob(), dependsOn: 'src*'),
         ]));
 
-        $sink = $dto->tasks->firstWhere(fn($task) => $task->name === 'sink');
-        $this->assertSame(['src*'], $sink->dependsOn->toArray());
+        $sink = $dto->tasks->firstWhere(fn($task): bool => $task->name === 'sink');
+        $this->assertSame(['src*'], $sink->dependsOn->all());
     }
 
-
-    public function test_parser_rejects_a_wildcard_matching_only_the_declaring_task_itself(): void {
+    /**
+     * @return void
+     */
+    public function test_parser_rejects_a_wildcard_matching_only_the_declaring_task_itself(): void
+    {
         $this->expectException(WorkflowTaskUnresolvedDependencyException::class);
 
         // "Import: *" matches "Import: Summary" itself and nothing else — self-matches
@@ -147,8 +193,11 @@ class DynamicDependenciesTest extends TestCase {
         ]));
     }
 
-
-    public function test_parser_rejects_a_task_name_containing_the_reserved_wildcard_character(): void {
+    /**
+     * @return void
+     */
+    public function test_parser_rejects_a_task_name_containing_the_reserved_wildcard_character(): void
+    {
         $this->expectException(WorkflowTaskReservedCharacterException::class);
 
         $this->parser()->parse(new WorkflowDefinition('wf', [
@@ -156,8 +205,11 @@ class DynamicDependenciesTest extends TestCase {
         ]));
     }
 
-
-    public function test_parser_detects_a_cycle_through_a_dynamic_dependency(): void {
+    /**
+     * @return void
+     */
+    public function test_parser_detects_a_cycle_through_a_dynamic_dependency(): void
+    {
         $this->expectException(WorkflowTaskCircularDependencyException::class);
 
         $this->parser()->parse(new WorkflowDefinition('wf', [
@@ -166,10 +218,13 @@ class DynamicDependenciesTest extends TestCase {
         ]));
     }
 
-
     // --- storing ---
 
-    public function test_store_persists_the_dynamic_dependency_and_gates_on_the_base_task(): void {
+    /**
+     * @return void
+     */
+    public function test_store_persists_the_dynamic_dependency_and_gates_on_the_base_task(): void
+    {
         $model = $this->dispatchSample();
 
         $src = $this->taskByName($model, 'src');
@@ -184,10 +239,13 @@ class DynamicDependenciesTest extends TestCase {
         Queue::assertNotPushed(DynamicDepsSinkJob::class);
     }
 
-
     // --- resolving ---
 
-    public function test_resolver_wires_spawned_tasks_into_stored_dynamic_dependants(): void {
+    /**
+     * @return void
+     */
+    public function test_resolver_wires_spawned_tasks_into_stored_dynamic_dependants(): void
+    {
         $model = $this->dispatchSample();
 
         $this->runResolver($model, 'src');
@@ -202,8 +260,11 @@ class DynamicDependenciesTest extends TestCase {
         $this->assertSame(['src', 'src:x', 'src:y'], $dependencyNames);
     }
 
-
-    public function test_dynamic_dependant_waits_for_every_spawned_task(): void {
+    /**
+     * @return void
+     */
+    public function test_dynamic_dependant_waits_for_every_spawned_task(): void
+    {
         $model = $this->dispatchSample();
         $this->runResolver($model, 'src');
 
@@ -217,16 +278,18 @@ class DynamicDependenciesTest extends TestCase {
         Queue::assertPushed(DynamicDepsSinkJob::class, 1);
     }
 
-
-    public function test_dynamic_dependant_runs_after_the_base_task_when_nothing_is_spawned(): void {
-        $model = $this->dispatchSample(items: fn() => []);
+    /**
+     * @return void
+     */
+    public function test_dynamic_dependant_runs_after_the_base_task_when_nothing_is_spawned(): void
+    {
+        $model = $this->dispatchSample(items: fn(): array => []);
         $this->runResolver($model, 'src');
 
         $this->completeTaskAndDispatchDependants($model, 'src');
 
         Queue::assertPushed(DynamicDepsSinkJob::class, 1);
     }
-
 
     // --- prefix globs across a task namespace ---
 
@@ -237,20 +300,24 @@ class DynamicDependenciesTest extends TestCase {
      *
      * @return Workflow
      */
-    private function dispatchNamespaceSample(): Workflow {
+    private function dispatchNamespaceSample(): Workflow
+    {
         return (new WorkflowDefinition('wf', [
             new Task('Import: Customers', new DynamicDepsTrackedJob()),
             new ResolvableTask(
                 name: 'Import: Orders',
-                items: fn() => ['us' => 'us', 'eu' => 'eu'],
-                jobs: fn($item) => new DynamicDepsTrackedJob(),
+                items: fn(): array => ['us' => 'us', 'eu' => 'eu'],
+                jobs: fn($item): DynamicDepsTrackedJob => new DynamicDepsTrackedJob(),
             ),
             new Task('Import: Summary', new DynamicDepsSinkJob(), dependsOn: 'Import: *'),
         ]))->dispatch();
     }
 
-
-    public function test_glob_gates_on_every_matching_sibling_but_not_on_itself(): void {
+    /**
+     * @return void
+     */
+    public function test_glob_gates_on_every_matching_sibling_but_not_on_itself(): void
+    {
         $model = $this->dispatchNamespaceSample();
 
         $dependencyNames = $this->taskByName($model, 'Import: Summary')
@@ -263,8 +330,11 @@ class DynamicDependenciesTest extends TestCase {
         $this->assertSame(['Import: Customers', 'Import: Orders'], $dependencyNames);
     }
 
-
-    public function test_glob_dependant_waits_for_siblings_and_every_spawned_task(): void {
+    /**
+     * @return void
+     */
+    public function test_glob_dependant_waits_for_siblings_and_every_spawned_task(): void
+    {
         $model = $this->dispatchNamespaceSample();
         $this->runResolver($model, 'Import: Orders');
 
@@ -289,17 +359,20 @@ class DynamicDependenciesTest extends TestCase {
         Queue::assertPushed(DynamicDepsSinkJob::class, 1);
     }
 
-
     // --- resolvable dependency inheritance ---
 
-    public function test_spawned_tasks_inherit_every_static_dependency_of_their_resolvable(): void {
+    /**
+     * @return void
+     */
+    public function test_spawned_tasks_inherit_every_static_dependency_of_their_resolvable(): void
+    {
         $model = (new WorkflowDefinition('wf', [
             new Task('a', new DynamicDepsTrackedJob()),
             new Task('b', new DynamicDepsTrackedJob()),
             new ResolvableTask(
                 name: 'src',
-                items: fn() => ['x' => 'x'],
-                jobs: fn($item) => new DynamicDepsTrackedJob(),
+                items: fn(): array => ['x' => 'x'],
+                jobs: fn($item): DynamicDepsTrackedJob => new DynamicDepsTrackedJob(),
                 dependsOn: ['a', 'b'],
             ),
         ]))->dispatch();

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Events\WorkflowCancelled;
 use AdamczykPiotr\DagWorkflows\Events\WorkflowPaused;
@@ -13,56 +15,84 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 
-class TestPausableJob implements ShouldQueue {
+class TestPausableJob implements ShouldQueue
+{
     use HasWorkflowTracking, InteractsWithQueue, Queueable;
+
+    /**
+     * @return void
+     */
     public function handle(): void {}
 }
 
-class PausableTasksTest extends TestCase {
-
-    protected function setUp(): void {
+class PausableTasksTest extends TestCase
+{
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
-        Carbon::setTestNow('2026-05-09 12:00:00');
+        Date::setTestNow('2026-05-09 12:00:00');
         Queue::fake();
     }
 
-
-    protected function tearDown(): void {
-        Carbon::setTestNow();
+    /**
+     * @return void
+     */
+    protected function tearDown(): void
+    {
+        Date::setTestNow();
 
         parent::tearDown();
     }
 
-
     // --- RunStatus enum ---
 
-    public function test_paused_is_not_terminal(): void {
+    /**
+     * @return void
+     */
+    public function test_paused_is_not_terminal(): void
+    {
         $this->assertFalse(RunStatus::PAUSED->isTerminal());
     }
 
-
-    public function test_suspended_is_not_terminal(): void {
+    /**
+     * @return void
+     */
+    public function test_suspended_is_not_terminal(): void
+    {
         $this->assertFalse(RunStatus::SUSPENDED->isTerminal());
     }
 
-
-    public function test_paused_and_suspended_return_true_for_is_blocked(): void {
+    /**
+     * @return void
+     */
+    public function test_paused_and_suspended_return_true_for_is_blocked(): void
+    {
         $this->assertTrue(RunStatus::PAUSED->isBlocked());
         $this->assertTrue(RunStatus::SUSPENDED->isBlocked());
     }
 
-
-    public function test_pending_and_running_return_true_for_is_active(): void {
+    /**
+     * @return void
+     */
+    public function test_pending_and_running_return_true_for_is_active(): void
+    {
         $this->assertTrue(RunStatus::PENDING->isActive());
         $this->assertTrue(RunStatus::RUNNING->isActive());
     }
 
-
-    public function test_other_statuses_return_false_for_is_active(): void {
+    /**
+     * @return void
+     */
+    public function test_other_statuses_return_false_for_is_active(): void
+    {
         $this->assertFalse(RunStatus::PAUSED->isActive());
         $this->assertFalse(RunStatus::SUSPENDED->isActive());
         $this->assertFalse(RunStatus::COMPLETED->isActive());
@@ -70,27 +100,39 @@ class PausableTasksTest extends TestCase {
         $this->assertFalse(RunStatus::CANCELLED->isActive());
     }
 
-
-    public function test_pending_and_running_can_be_paused(): void {
+    /**
+     * @return void
+     */
+    public function test_pending_and_running_can_be_paused(): void
+    {
         $this->assertTrue(RunStatus::PENDING->canBePaused());
         $this->assertTrue(RunStatus::RUNNING->canBePaused());
     }
 
-
-    public function test_terminal_statuses_cannot_be_paused(): void {
+    /**
+     * @return void
+     */
+    public function test_terminal_statuses_cannot_be_paused(): void
+    {
         $this->assertFalse(RunStatus::COMPLETED->canBePaused());
         $this->assertFalse(RunStatus::FAILED->canBePaused());
         $this->assertFalse(RunStatus::CANCELLED->canBePaused());
     }
 
-
-    public function test_paused_and_suspended_cannot_be_paused_again(): void {
+    /**
+     * @return void
+     */
+    public function test_paused_and_suspended_cannot_be_paused_again(): void
+    {
         $this->assertFalse(RunStatus::PAUSED->canBePaused());
         $this->assertFalse(RunStatus::SUSPENDED->canBePaused());
     }
 
-
-    public function test_only_paused_can_be_resumed(): void {
+    /**
+     * @return void
+     */
+    public function test_only_paused_can_be_resumed(): void
+    {
         $this->assertTrue(RunStatus::PAUSED->canBeResumed());
         $this->assertFalse(RunStatus::PENDING->canBeResumed());
         $this->assertFalse(RunStatus::RUNNING->canBeResumed());
@@ -100,25 +142,37 @@ class PausableTasksTest extends TestCase {
         $this->assertFalse(RunStatus::SUSPENDED->canBeResumed());
     }
 
-
-    public function test_returns_correct_active_statuses_array(): void {
+    /**
+     * @return void
+     */
+    public function test_returns_correct_active_statuses_array(): void
+    {
         $this->assertSame([RunStatus::PENDING, RunStatus::RUNNING], RunStatus::active());
     }
 
-
-    public function test_returns_correct_blocked_statuses_array(): void {
+    /**
+     * @return void
+     */
+    public function test_returns_correct_blocked_statuses_array(): void
+    {
         $this->assertSame([RunStatus::PAUSED, RunStatus::SUSPENDED], RunStatus::blocked());
     }
 
-
-    public function test_returns_correct_non_terminal_statuses_array(): void {
+    /**
+     * @return void
+     */
+    public function test_returns_correct_non_terminal_statuses_array(): void
+    {
         $this->assertSame([RunStatus::PENDING, RunStatus::RUNNING, RunStatus::PAUSED, RunStatus::SUSPENDED], RunStatus::nonTerminal());
     }
 
-
     // --- Step pause ---
 
-    public function test_can_pause_a_pending_step(): void {
+    /**
+     * @return void
+     */
+    public function test_can_pause_a_pending_step(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::PENDING);
@@ -132,8 +186,11 @@ class PausableTasksTest extends TestCase {
         $this->assertNotNull($step->paused_at);
     }
 
-
-    public function test_can_pause_a_running_step(): void {
+    /**
+     * @return void
+     */
+    public function test_can_pause_a_running_step(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::RUNNING);
@@ -145,8 +202,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::PAUSED, $step->status);
     }
 
-
-    public function test_cannot_pause_a_completed_step(): void {
+    /**
+     * @return void
+     */
+    public function test_cannot_pause_a_completed_step(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::COMPLETED);
@@ -158,8 +218,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $step->status);
     }
 
-
-    public function test_suspends_subsequent_steps_when_step_is_paused(): void {
+    /**
+     * @return void
+     */
+    public function test_suspends_subsequent_steps_when_step_is_paused(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step1 = $this->createStep($task, RunStatus::RUNNING, 1);
@@ -174,8 +237,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::SUSPENDED, $step3->status);
     }
 
-
-    public function test_suspends_dependant_tasks_when_step_is_paused(): void {
+    /**
+     * @return void
+     */
+    public function test_suspends_dependant_tasks_when_step_is_paused(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task1 = $this->createTask($workflow, RunStatus::RUNNING, 'task1');
         $step1 = $this->createStep($task1, RunStatus::RUNNING);
@@ -189,8 +255,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::SUSPENDED, $task2->status);
     }
 
-
-    public function test_does_not_cascade_up_to_pause_task_or_workflow(): void {
+    /**
+     * @return void
+     */
+    public function test_does_not_cascade_up_to_pause_task_or_workflow(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::RUNNING);
@@ -203,8 +272,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::RUNNING, $workflow->status);
     }
 
-
-    public function test_step_pause_with_null_reason_works_correctly(): void {
+    /**
+     * @return void
+     */
+    public function test_step_pause_with_null_reason_works_correctly(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::RUNNING);
@@ -217,10 +289,13 @@ class PausableTasksTest extends TestCase {
         $this->assertNotNull($step->paused_at);
     }
 
-
     // --- Step resume ---
 
-    public function test_can_resume_a_paused_step_and_marks_it_completed(): void {
+    /**
+     * @return void
+     */
+    public function test_can_resume_a_paused_step_and_marks_it_completed(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::PAUSED);
@@ -238,8 +313,11 @@ class PausableTasksTest extends TestCase {
         $this->assertNull($step->pause_reason);
     }
 
-
-    public function test_cannot_resume_a_pending_step(): void {
+    /**
+     * @return void
+     */
+    public function test_cannot_resume_a_pending_step(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::PENDING);
@@ -249,8 +327,11 @@ class PausableTasksTest extends TestCase {
         $this->assertFalse($result);
     }
 
-
-    public function test_cannot_resume_a_completed_step(): void {
+    /**
+     * @return void
+     */
+    public function test_cannot_resume_a_completed_step(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::COMPLETED);
         $step = $this->createStep($task, RunStatus::COMPLETED);
@@ -260,8 +341,11 @@ class PausableTasksTest extends TestCase {
         $this->assertFalse($result);
     }
 
-
-    public function test_unsuspends_subsequent_steps_when_step_is_resumed(): void {
+    /**
+     * @return void
+     */
+    public function test_unsuspends_subsequent_steps_when_step_is_resumed(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step1 = $this->createStep($task, RunStatus::PAUSED, 1);
@@ -276,8 +360,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::PENDING, $step3->status);
     }
 
-
-    public function test_unsuspends_dependant_tasks_when_step_is_resumed(): void {
+    /**
+     * @return void
+     */
+    public function test_unsuspends_dependant_tasks_when_step_is_resumed(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task1 = $this->createTask($workflow, RunStatus::RUNNING, 'task1');
         $step1 = $this->createStep($task1, RunStatus::PAUSED);
@@ -293,8 +380,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::PENDING, $step2->status);
     }
 
-
-    public function test_dispatches_next_step_when_step_is_resumed(): void {
+    /**
+     * @return void
+     */
+    public function test_dispatches_next_step_when_step_is_resumed(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step1 = $this->createStep($task, RunStatus::PAUSED, 1);
@@ -305,10 +395,13 @@ class PausableTasksTest extends TestCase {
         Queue::assertPushed(TestPausableJob::class);
     }
 
-
     // --- Step cancel ---
 
-    public function test_can_cancel_a_pending_step(): void {
+    /**
+     * @return void
+     */
+    public function test_can_cancel_a_pending_step(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::PENDING);
@@ -321,8 +414,11 @@ class PausableTasksTest extends TestCase {
         $this->assertNotNull($step->failed_at);
     }
 
-
-    public function test_can_cancel_a_paused_step(): void {
+    /**
+     * @return void
+     */
+    public function test_can_cancel_a_paused_step(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::PAUSED);
@@ -338,8 +434,11 @@ class PausableTasksTest extends TestCase {
         $this->assertNull($step->paused_at);
     }
 
-
-    public function test_cannot_cancel_a_completed_step(): void {
+    /**
+     * @return void
+     */
+    public function test_cannot_cancel_a_completed_step(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::COMPLETED);
@@ -349,8 +448,11 @@ class PausableTasksTest extends TestCase {
         $this->assertFalse($result);
     }
 
-
-    public function test_cancels_subsequent_steps_in_the_task(): void {
+    /**
+     * @return void
+     */
+    public function test_cancels_subsequent_steps_in_the_task(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step1 = $this->createStep($task, RunStatus::COMPLETED, 1);
@@ -369,8 +471,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::CANCELLED, $step4->status);
     }
 
-
-    public function test_cancels_the_task_when_step_is_cancelled(): void {
+    /**
+     * @return void
+     */
+    public function test_cancels_the_task_when_step_is_cancelled(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::RUNNING);
@@ -381,8 +486,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::CANCELLED, $task->status);
     }
 
-
-    public function test_cancels_dependant_tasks_when_step_is_cancelled(): void {
+    /**
+     * @return void
+     */
+    public function test_cancels_dependant_tasks_when_step_is_cancelled(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task1 = $this->createTask($workflow, RunStatus::RUNNING, 'task1');
         $step1 = $this->createStep($task1, RunStatus::RUNNING);
@@ -397,8 +505,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::CANCELLED, $task2->status);
     }
 
-
-    public function test_cancels_workflow_when_step_cancel_leaves_no_active_tasks(): void {
+    /**
+     * @return void
+     */
+    public function test_cancels_workflow_when_step_cancel_leaves_no_active_tasks(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step = $this->createStep($task, RunStatus::RUNNING);
@@ -409,10 +520,13 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::CANCELLED, $workflow->status);
     }
 
-
     // --- Complex scenarios ---
 
-    public function test_handles_pause_resume_complete_cycle_with_downstream_suspension(): void {
+    /**
+     * @return void
+     */
+    public function test_handles_pause_resume_complete_cycle_with_downstream_suspension(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task1 = $this->createTask($workflow, RunStatus::RUNNING, 'task1');
         $step1 = $this->createStep($task1, RunStatus::RUNNING);
@@ -432,8 +546,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::PENDING, $task2->refresh()->status);
     }
 
-
-    public function test_preserves_pause_reason_on_step_only_no_cascade_up(): void {
+    /**
+     * @return void
+     */
+    public function test_preserves_pause_reason_on_step_only_no_cascade_up(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
         $task = $this->createTask($workflow, RunStatus::RUNNING);
         $step1 = $this->createStep($task, RunStatus::COMPLETED, 1);
@@ -446,8 +563,11 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::RUNNING, $workflow->refresh()->status);
     }
 
-
-    public function test_handles_cascading_cancellation_through_step_cancel(): void {
+    /**
+     * @return void
+     */
+    public function test_handles_cascading_cancellation_through_step_cancel(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
 
         $task1 = $this->createTask($workflow, RunStatus::COMPLETED, 'task1');
@@ -470,27 +590,39 @@ class PausableTasksTest extends TestCase {
         $this->assertSame(RunStatus::CANCELLED, $workflow->refresh()->status);
     }
 
-
     // --- Model attributes ---
 
-    public function test_workflow_has_pause_attributes_defined(): void {
+    /**
+     * @return void
+     */
+    public function test_workflow_has_pause_attributes_defined(): void
+    {
         $this->assertSame('paused_at', Workflow::ATTRIBUTE_PAUSED_AT);
         $this->assertSame('pause_reason', Workflow::ATTRIBUTE_PAUSE_REASON);
     }
 
-
-    public function test_task_has_pause_attributes_defined(): void {
+    /**
+     * @return void
+     */
+    public function test_task_has_pause_attributes_defined(): void
+    {
         $this->assertSame('paused_at', WorkflowTask::ATTRIBUTE_PAUSED_AT);
     }
 
-
-    public function test_step_has_pause_attributes_defined(): void {
+    /**
+     * @return void
+     */
+    public function test_step_has_pause_attributes_defined(): void
+    {
         $this->assertSame('paused_at', WorkflowTaskStep::ATTRIBUTE_PAUSED_AT);
         $this->assertSame('pause_reason', WorkflowTaskStep::ATTRIBUTE_PAUSE_REASON);
     }
 
-
-    public function test_paused_at_is_cast_to_datetime(): void {
+    /**
+     * @return void
+     */
+    public function test_paused_at_is_cast_to_datetime(): void
+    {
         $workflow = $this->createWorkflow(RunStatus::PAUSED);
         $workflow->paused_at = '2026-05-09 12:00:00';
         $workflow->save();
@@ -499,10 +631,13 @@ class PausableTasksTest extends TestCase {
         $this->assertInstanceOf(Carbon::class, $workflow->paused_at);
     }
 
-
     // --- Events ---
 
-    public function test_dispatches_workflow_paused_event_when_step_is_paused(): void {
+    /**
+     * @return void
+     */
+    public function test_dispatches_workflow_paused_event_when_step_is_paused(): void
+    {
         Event::fake([WorkflowPaused::class]);
 
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
@@ -511,7 +646,7 @@ class PausableTasksTest extends TestCase {
 
         $step->pause('Step paused');
 
-        Event::assertDispatched(WorkflowPaused::class, function ($event) use ($workflow, $task, $step) {
+        Event::assertDispatched(WorkflowPaused::class, function ($event) use ($workflow, $task, $step): bool {
             return $event->step->task->workflow->id === $workflow->id
                 && $event->step->task->id === $task->id
                 && $event->step->id === $step->id
@@ -519,8 +654,11 @@ class PausableTasksTest extends TestCase {
         });
     }
 
-
-    public function test_dispatches_workflow_resumed_event_when_step_is_resumed(): void {
+    /**
+     * @return void
+     */
+    public function test_dispatches_workflow_resumed_event_when_step_is_resumed(): void
+    {
         Event::fake([WorkflowResumed::class]);
 
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
@@ -529,15 +667,18 @@ class PausableTasksTest extends TestCase {
 
         $step->resume();
 
-        Event::assertDispatched(WorkflowResumed::class, function ($event) use ($workflow, $task, $step) {
+        Event::assertDispatched(WorkflowResumed::class, function ($event) use ($workflow, $task, $step): bool {
             return $event->step->task->workflow->id === $workflow->id
                 && $event->step->task->id === $task->id
                 && $event->step->id === $step->id;
         });
     }
 
-
-    public function test_dispatches_workflow_cancelled_event_when_step_is_cancelled(): void {
+    /**
+     * @return void
+     */
+    public function test_dispatches_workflow_cancelled_event_when_step_is_cancelled(): void
+    {
         Event::fake([WorkflowCancelled::class]);
 
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
@@ -546,15 +687,18 @@ class PausableTasksTest extends TestCase {
 
         $step->cancel();
 
-        Event::assertDispatched(WorkflowCancelled::class, function ($event) use ($workflow, $task, $step) {
+        Event::assertDispatched(WorkflowCancelled::class, function ($event) use ($workflow, $task, $step): bool {
             return $event->step->task->workflow->id === $workflow->id
                 && $event->step->task->id === $task->id
                 && $event->step->id === $step->id;
         });
     }
 
-
-    public function test_does_not_dispatch_event_when_pause_fails(): void {
+    /**
+     * @return void
+     */
+    public function test_does_not_dispatch_event_when_pause_fails(): void
+    {
         Event::fake([WorkflowPaused::class]);
 
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
@@ -566,8 +710,11 @@ class PausableTasksTest extends TestCase {
         Event::assertNotDispatched(WorkflowPaused::class);
     }
 
-
-    public function test_does_not_dispatch_event_when_resume_fails(): void {
+    /**
+     * @return void
+     */
+    public function test_does_not_dispatch_event_when_resume_fails(): void
+    {
         Event::fake([WorkflowResumed::class]);
 
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
@@ -579,8 +726,11 @@ class PausableTasksTest extends TestCase {
         Event::assertNotDispatched(WorkflowResumed::class);
     }
 
-
-    public function test_does_not_dispatch_event_when_cancel_fails(): void {
+    /**
+     * @return void
+     */
+    public function test_does_not_dispatch_event_when_cancel_fails(): void
+    {
         Event::fake([WorkflowCancelled::class]);
 
         $workflow = $this->createWorkflow(RunStatus::RUNNING);
@@ -592,8 +742,13 @@ class PausableTasksTest extends TestCase {
         Event::assertNotDispatched(WorkflowCancelled::class);
     }
 
-
-    private function createWorkflow(RunStatus $status = RunStatus::PENDING): Workflow {
+    /**
+     * @param RunStatus $status
+     *
+     * @return Workflow
+     */
+    private function createWorkflow(RunStatus $status = RunStatus::PENDING): Workflow
+    {
         $workflow = new Workflow();
         $workflow->name = 'test-workflow';
         $workflow->status = $status;
@@ -601,8 +756,15 @@ class PausableTasksTest extends TestCase {
         return $workflow;
     }
 
-
-    private function createTask(Workflow $workflow, RunStatus $status = RunStatus::PENDING, string $name = 'task'): WorkflowTask {
+    /**
+     * @param Workflow $workflow
+     * @param RunStatus $status
+     * @param string $name
+     *
+     * @return WorkflowTask
+     */
+    private function createTask(Workflow $workflow, RunStatus $status = RunStatus::PENDING, string $name = 'task'): WorkflowTask
+    {
         $task = new WorkflowTask();
         $task->workflow_id = $workflow->id;
         $task->name = $name;
@@ -611,8 +773,15 @@ class PausableTasksTest extends TestCase {
         return $task;
     }
 
-
-    private function createStep(WorkflowTask $task, RunStatus $status = RunStatus::PENDING, int $order = 1): WorkflowTaskStep {
+    /**
+     * @param WorkflowTask $task
+     * @param RunStatus $status
+     * @param int $order
+     *
+     * @return WorkflowTaskStep
+     */
+    private function createStep(WorkflowTask $task, RunStatus $status = RunStatus::PENDING, int $order = 1): WorkflowTaskStep
+    {
         $step = new WorkflowTaskStep();
         $step->task_id = $task->id;
         $step->workflow_id = $task->workflow_id;
@@ -624,8 +793,14 @@ class PausableTasksTest extends TestCase {
         return $step;
     }
 
-
-    private function linkDependency(WorkflowTask $task, WorkflowTask $dependsOn): void {
+    /**
+     * @param WorkflowTask $task
+     * @param WorkflowTask $dependsOn
+     *
+     * @return void
+     */
+    private function linkDependency(WorkflowTask $task, WorkflowTask $dependsOn): void
+    {
         $task->dependencies()->attach($dependsOn->id);
     }
 }

@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Middlewares\DagWorkflowTrackerJobMiddleware;
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
+use AdamczykPiotr\DagWorkflows\Models\WorkflowTaskStep;
 use AdamczykPiotr\DagWorkflows\Services\WorkflowDispatcher;
 use AdamczykPiotr\DagWorkflows\Tests\TestCase;
 use Illuminate\Support\Facades\DB;
@@ -13,12 +16,20 @@ use Illuminate\Support\Testing\Fakes\QueueFake;
  * Queue fake recording the DB transaction nesting level at every push, so tests
  * can assert WHERE in the completion flow a job was dispatched from.
  */
-class TransactionLevelRecordingQueueFake extends QueueFake {
-
-    /** @var array<int, array{class: string, level: int}> */
+class TransactionLevelRecordingQueueFake extends QueueFake
+{
+    /**
+     * @var array<int, array{class: string, level: int}>
+     */
     public array $pushes = [];
 
-    public function push($job = null, $data = '', $queue = null) {
+    /**
+     * @param mixed $job
+     * @param mixed $data
+     * @param mixed $queue
+     */
+    public function push($job = null, $data = '', $queue = null)
+    {
         $this->pushes[] = ['class' => is_object($job) ? get_class($job) : (string)$job, 'level' => DB::transactionLevel()];
 
         return parent::push($job, $data, $queue);
@@ -32,11 +43,15 @@ class TransactionLevelRecordingQueueFake extends QueueFake {
  * would still drain to all-COMPLETED, so execution order is asserted here
  * explicitly via the harness execution log.
  */
-class DependencyOrderingTest extends TestCase {
-
+class DependencyOrderingTest extends TestCase
+{
     use InteractsWithStatusFlow;
 
-    protected function setUp(): void {
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
         Queue::fake();
@@ -44,22 +59,27 @@ class DependencyOrderingTest extends TestCase {
         StatusFlowJob::$executionLog = [];
     }
 
-
-    protected function tearDown(): void {
+    /**
+     * @return void
+     */
+    protected function tearDown(): void
+    {
         StatusFlowJob::$behaviours = [];
         StatusFlowJob::$executionLog = [];
 
         parent::tearDown();
     }
 
-
     /**
      * Run only the pushed-but-not-yet-drained jobs belonging to the given task,
      * mimicking one branch of workers finishing while another lags behind.
      *
      * @param WorkflowTask $task
+     *
+     * @return void
      */
-    private function drainOnlyTask(WorkflowTask $task): void {
+    private function drainOnlyTask(WorkflowTask $task): void
+    {
         $middleware = resolve(DagWorkflowTrackerJobMiddleware::class);
 
         do {
@@ -77,12 +97,13 @@ class DependencyOrderingTest extends TestCase {
         } while ($ran);
     }
 
-
     /**
      * @param WorkflowTask $task
+     *
      * @return bool
      */
-    private function taskWasDispatched(WorkflowTask $task): bool {
+    private function taskWasDispatched(WorkflowTask $task): bool
+    {
         foreach (Queue::pushed(StatusFlowJob::class) as $job) {
             if ($job->workflowTaskStep->task_id === $task->id) {
                 return true;
@@ -92,8 +113,11 @@ class DependencyOrderingTest extends TestCase {
         return false;
     }
 
-
-    public function test_every_task_runs_only_after_all_of_its_dependencies_completed(): void {
+    /**
+     * @return void
+     */
+    public function test_every_task_runs_only_after_all_of_its_dependencies_completed(): void
+    {
         // Diamond feeding a chain: a → (b, c) → d → e, plus an independent task f.
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 2],
@@ -118,13 +142,13 @@ class DependencyOrderingTest extends TestCase {
 
         foreach ($dependencies as $taskName => $dependsOn) {
             $firstOwnStep = min(array_map(
-                fn($step) => $executionOrder[$step->id],
+                fn(WorkflowTaskStep $step): int => $executionOrder[$step->id],
                 $steps[$taskName]
             ));
 
             foreach ($dependsOn as $dependencyName) {
                 $lastDependencyStep = max(array_map(
-                    fn($step) => $executionOrder[$step->id],
+                    fn(WorkflowTaskStep $step): int => $executionOrder[$step->id],
                     $steps[$dependencyName]
                 ));
 
@@ -137,8 +161,11 @@ class DependencyOrderingTest extends TestCase {
         }
     }
 
-
-    public function test_a_task_with_multiple_dependencies_is_not_dispatched_until_the_last_one_completes(): void {
+    /**
+     * @return void
+     */
+    public function test_a_task_with_multiple_dependencies_is_not_dispatched_until_the_last_one_completes(): void
+    {
         [$workflow, $tasks] = $this->buildWorkflow([
             'b' => ['steps' => 1],
             'c' => ['steps' => 1],
@@ -161,15 +188,17 @@ class DependencyOrderingTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $workflow->refresh()->status);
     }
 
-
     /**
      * Dependant readiness is checked AFTER the completion transaction commits.
      * Checking inside it is a stranding race: two dependencies completing
      * concurrently on separate workers would each miss the other's uncommitted
      * completion and both skip their shared dependant, hanging the workflow.
      * A post-commit check guarantees the last committer sees every completion.
+     *
+     * @return void
      */
-    public function test_dependant_tasks_are_dispatched_outside_the_completion_transaction(): void {
+    public function test_dependant_tasks_are_dispatched_outside_the_completion_transaction(): void
+    {
         $fake = new TransactionLevelRecordingQueueFake(app());
         Queue::swap($fake);
 
@@ -190,8 +219,11 @@ class DependencyOrderingTest extends TestCase {
         }
     }
 
-
-    public function test_a_failed_dependency_never_releases_its_dependants(): void {
+    /**
+     * @return void
+     */
+    public function test_a_failed_dependency_never_releases_its_dependants(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'b' => ['steps' => 1],
             'c' => ['steps' => 1],

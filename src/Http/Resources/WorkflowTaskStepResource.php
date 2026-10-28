@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Http\Resources;
 
 use AdamczykPiotr\DagWorkflows\Dto\WorkflowTaskStepEstimateDto;
@@ -10,8 +12,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * @mixin WorkflowTaskStep
  */
-class WorkflowTaskStepResource extends JsonResource {
-
+class WorkflowTaskStepResource extends JsonResource
+{
+    /**
+     * @param WorkflowTaskStep $step
+     * @param WorkflowTaskStepEstimateDto $estimate
+     */
     public function __construct(
         WorkflowTaskStep $step,
         private readonly WorkflowTaskStepEstimateDto $estimate,
@@ -19,12 +25,13 @@ class WorkflowTaskStepResource extends JsonResource {
         parent::__construct($step);
     }
 
-
     /**
      * @param Request $request
+     *
      * @return array<string, mixed>
      */
-    public function toArray(Request $request): array {
+    public function toArray(Request $request): array
+    {
         return [
             'id' => $this->id,
             'order' => $this->order,

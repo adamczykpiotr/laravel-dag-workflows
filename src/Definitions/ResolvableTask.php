@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Definitions;
 
-class ResolvableTask {
-
+class ResolvableTask
+{
     /**
      * @template TEntry
      *
@@ -17,6 +19,5 @@ class ResolvableTask {
         public mixed $items,
         public mixed $jobs,
         public string|array $dependsOn = [],
-    ) {
-    }
+    ) {}
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Http\Resources;
 
 use AdamczykPiotr\DagWorkflows\Dto\WorkflowEstimateDto;
@@ -12,8 +14,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * @mixin Workflow
  */
-class WorkflowResource extends JsonResource {
-
+class WorkflowResource extends JsonResource
+{
+    /**
+     * @param Workflow $workflow
+     * @param WorkflowEstimateDto $estimate
+     */
     public function __construct(
         Workflow $workflow,
         private readonly WorkflowEstimateDto $estimate,
@@ -21,12 +27,13 @@ class WorkflowResource extends JsonResource {
         parent::__construct($workflow);
     }
 
-
     /**
      * @param Request $request
+     *
      * @return array<string, mixed>
      */
-    public function toArray(Request $request): array {
+    public function toArray(Request $request): array
+    {
         /** @var Workflow $workflow */
         $workflow = $this->resource;
         $estimate = $this->estimate;
@@ -50,7 +57,7 @@ class WorkflowResource extends JsonResource {
 
             'tasks' => $this->when(
                 $workflow->relationLoaded(Workflow::RELATION_TASKS),
-                fn() => $workflow->tasks->map(function(WorkflowTask $task) use ($estimate) {
+                fn() => $workflow->tasks->map(function(WorkflowTask $task) use ($estimate): WorkflowTaskResource {
                     $taskEstimate = $estimate->tasks[$task->id];
                     assert($taskEstimate instanceof WorkflowTaskEstimateDto);
 

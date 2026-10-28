@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Http\Resources;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
@@ -16,13 +18,15 @@ use Illuminate\Support\Collection;
  *
  * @mixin Workflow
  */
-class WorkflowSummaryResource extends JsonResource {
-
+class WorkflowSummaryResource extends JsonResource
+{
     /**
      * @param Request $request
+     *
      * @return array<string, mixed>
      */
-    public function toArray(Request $request): array {
+    public function toArray(Request $request): array
+    {
         /** @var Workflow $workflow */
         $workflow = $this->resource;
 
@@ -57,25 +61,29 @@ class WorkflowSummaryResource extends JsonResource {
         ];
     }
 
-
-    private function durationSeconds(): int {
+    /**
+     * @return int
+     */
+    private function durationSeconds(): int
+    {
         /** @var Workflow $workflow */
         $workflow = $this->resource;
 
         $end = $workflow->completed_at ?? $workflow->failed_at ?? now();
 
-        return (int) max(0, round($workflow->created_at?->diffInSeconds($end) ?? 0));
+        return (int)max(0, round($workflow->created_at?->diffInSeconds($end) ?? 0));
     }
-
 
     /**
      * COMPLETED and SKIPPED both count as done: SKIPPED is the terminal,
      * non-failing status of steps bypassed by an early task completion.
      *
      * @param Collection<string, int> $statuses
+     *
      * @return float
      */
-    private function completionPercentage(Collection $statuses): float {
+    private function completionPercentage(Collection $statuses): float
+    {
         $total = $statuses->reduce(fn(int $carry, int $count): int => $carry + $count, 0);
 
         if ($total === 0) {
@@ -88,15 +96,16 @@ class WorkflowSummaryResource extends JsonResource {
         return round($done / $total * 100, 2);
     }
 
-
     /**
      * Average effective progress across every step: done steps weigh 100, running
      * steps weigh their self-reported progress, everything else weighs 0.
      *
      * @param Collection<int, WorkflowTaskStep> $steps
+     *
      * @return float
      */
-    private function progressPercentage(Collection $steps): float {
+    private function progressPercentage(Collection $steps): float
+    {
         if ($steps->isEmpty()) {
             return 0.0;
         }

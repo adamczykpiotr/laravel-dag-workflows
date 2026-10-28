@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Definitions;
 
-class TaskGroup {
-
+class TaskGroup
+{
     /**
      * @param array<int, Task|ResolvableTask> $tasks
      * @param string|array<int, string> $dependsOn
@@ -11,6 +13,5 @@ class TaskGroup {
     public function __construct(
         public array $tasks,
         public string|array $dependsOn
-    ) {
-    }
+    ) {}
 }

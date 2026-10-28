@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Http\Resources;
 
 use AdamczykPiotr\DagWorkflows\Models\WorkflowTask;
@@ -9,13 +11,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /**
  * @mixin WorkflowTask
  */
-class WorkflowTaskDependantsResource extends JsonResource {
-
+class WorkflowTaskDependantsResource extends JsonResource
+{
     /**
      * @param Request $request
+     *
      * @return array<string, mixed>
- */
-    public function toArray(Request $request): array {
+     */
+    public function toArray(Request $request): array
+    {
         return [
             'childTaskId' => $this->id,
         ];

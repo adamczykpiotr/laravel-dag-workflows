@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Models;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
@@ -14,7 +16,6 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
-
 
 /**
  * @property int $id
@@ -38,41 +39,41 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property-read Collection<int, WorkflowTaskStep> $steps
  * @property-read int|null $steps_count
  * @property-read Workflow $workflow
+ *
  * @method static Builder<static>|WorkflowTask newModelQuery()
  * @method static Builder<static>|WorkflowTask newQuery()
  * @method static Builder<static>|WorkflowTask query()
+ *
  * @mixin Eloquent
  */
-class WorkflowTask extends BaseModel {
-
-    const string ATTRIBUTE_ID = 'id';
-    const string ATTRIBUTE_WORKFLOW_ID = 'workflow_id';
-    const string ATTRIBUTE_NAME = 'name';
-    const string ATTRIBUTE_DYNAMIC_DEPENDENCIES = 'dynamic_dependencies';
-    const string ATTRIBUTE_STATUS = 'status';
-    const string ATTRIBUTE_STARTED_AT = 'started_at';
-    const string ATTRIBUTE_FAILED_AT = 'failed_at';
-    const string ATTRIBUTE_PAUSED_AT = 'paused_at';
-    const string ATTRIBUTE_COMPLETED_AT = 'completed_at';
-    const string ATTRIBUTE_CREATED_AT = 'created_at';
-    const string ATTRIBUTE_UPDATED_AT = 'updated_at';
-
-    const string RELATION_WORKFLOW = 'workflow';
-    const string RELATION_STEPS = 'steps';
-    const string RELATION_INITIAL_STEP = 'initialStep';
-    const string RELATION_DEPENDENCIES = 'dependencies';
-    const string RELATION_DEPENDANTS = 'dependants';
-    const string RELATION_RECURSIVE_DEPENDANTS = 'recursiveDependants';
-
-    const string PIVOT_DEPENDENCIES_TABLE = 'workflow_task_dependencies';
-    const string PIVOT_COLUMN_TASK_ID = 'task_id';
-    const string PIVOT_COLUMN_DEPENDANT_TASK_ID = 'dependant_task_id';
-
+class WorkflowTask extends BaseModel
+{
+    public const string ATTRIBUTE_ID = 'id';
+    public const string ATTRIBUTE_WORKFLOW_ID = 'workflow_id';
+    public const string ATTRIBUTE_NAME = 'name';
+    public const string ATTRIBUTE_DYNAMIC_DEPENDENCIES = 'dynamic_dependencies';
+    public const string ATTRIBUTE_STATUS = 'status';
+    public const string ATTRIBUTE_STARTED_AT = 'started_at';
+    public const string ATTRIBUTE_FAILED_AT = 'failed_at';
+    public const string ATTRIBUTE_PAUSED_AT = 'paused_at';
+    public const string ATTRIBUTE_COMPLETED_AT = 'completed_at';
+    public const string ATTRIBUTE_CREATED_AT = 'created_at';
+    public const string ATTRIBUTE_UPDATED_AT = 'updated_at';
+    public const string RELATION_WORKFLOW = 'workflow';
+    public const string RELATION_STEPS = 'steps';
+    public const string RELATION_INITIAL_STEP = 'initialStep';
+    public const string RELATION_DEPENDENCIES = 'dependencies';
+    public const string RELATION_DEPENDANTS = 'dependants';
+    public const string RELATION_RECURSIVE_DEPENDANTS = 'recursiveDependants';
+    public const string PIVOT_DEPENDENCIES_TABLE = 'workflow_task_dependencies';
+    public const string PIVOT_COLUMN_TASK_ID = 'task_id';
+    public const string PIVOT_COLUMN_DEPENDANT_TASK_ID = 'dependant_task_id';
 
     /**
      * @return array<string, string>
      */
-    public function casts(): array {
+    public function casts(): array
+    {
         return [
             self::ATTRIBUTE_STATUS => RunStatus::class,
             self::ATTRIBUTE_DYNAMIC_DEPENDENCIES => 'array',
@@ -83,37 +84,37 @@ class WorkflowTask extends BaseModel {
         ];
     }
 
-
     /**
      * @return BelongsTo<Workflow, $this>
      */
-    public function workflow(): BelongsTo {
+    public function workflow(): BelongsTo
+    {
         return $this->belongsTo(Workflow::class);
     }
-
 
     /**
      * @return HasMany<WorkflowTaskStep, $this>
      */
-    public function steps(): HasMany {
+    public function steps(): HasMany
+    {
         return $this->hasMany(WorkflowTaskStep::class, WorkflowTaskStep::ATTRIBUTE_TASK_ID)
             ->orderBy(WorkflowTaskStep::ATTRIBUTE_ORDER);
     }
 
-
     /**
      * @return HasOne<WorkflowTaskStep, $this>
      */
-    public function initialStep(): HasOne {
+    public function initialStep(): HasOne
+    {
         return $this->hasOne(WorkflowTaskStep::class, WorkflowTaskStep::ATTRIBUTE_TASK_ID)
             ->where(WorkflowTaskStep::ATTRIBUTE_ORDER, 1);
     }
 
-
     /**
      * @return BelongsToMany<WorkflowTask, $this, Pivot>
      */
-    public function dependencies(): BelongsToMany {
+    public function dependencies(): BelongsToMany
+    {
         return $this->belongsToMany(
             WorkflowTask::class,
             self::PIVOT_DEPENDENCIES_TABLE,
@@ -122,11 +123,11 @@ class WorkflowTask extends BaseModel {
         )->orderBy(WorkflowTask::ATTRIBUTE_ID);
     }
 
-
     /**
      * @return BelongsToMany<WorkflowTask, $this, Pivot>
      */
-    public function dependants(): BelongsToMany {
+    public function dependants(): BelongsToMany
+    {
         return $this->belongsToMany(
             WorkflowTask::class,
             self::PIVOT_DEPENDENCIES_TABLE,
@@ -135,20 +136,20 @@ class WorkflowTask extends BaseModel {
         );
     }
 
-
     /**
      * @return BelongsToMany<WorkflowTask, $this, Pivot>
      */
-    public function recursiveDependants(): BelongsToMany {
+    public function recursiveDependants(): BelongsToMany
+    {
         return $this->dependants()
             ->with(self::RELATION_RECURSIVE_DEPENDANTS);
     }
 
-
     /**
      * @return SupportCollection<int, int>
      */
-    public function getRecursiveDependantIds(): SupportCollection {
+    public function getRecursiveDependantIds(): SupportCollection
+    {
         $ids = collect();
 
         foreach ($this->recursiveDependants as $dependant) {
@@ -165,12 +166,13 @@ class WorkflowTask extends BaseModel {
     |--------------------------------------------------------------------------
     */
 
-
     /**
      * @param bool $force
+     *
      * @return bool
      */
-    public function dispatch(bool $force = false): bool {
+    public function dispatch(bool $force = false): bool
+    {
         /** @var WorkflowDispatcher $dispatcher */
         $dispatcher = resolve(WorkflowDispatcher::class);
         return $dispatcher->dispatchTask($this, $force);

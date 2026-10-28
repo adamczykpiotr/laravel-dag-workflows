@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Tests\TestCase;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 
 /**
@@ -15,26 +17,32 @@ use Illuminate\Support\Facades\Queue;
  * it would on a real worker. The goal is to assert that the workflow status is
  * always driven to a correct terminal value.
  */
-class StatusPropagationTest extends TestCase {
-
+class StatusPropagationTest extends TestCase
+{
     use InteractsWithStatusFlow;
 
-    protected function setUp(): void {
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
-        Carbon::setTestNow('2026-07-06 12:00:00');
+        Date::setTestNow('2026-07-06 12:00:00');
         Queue::fake();
         StatusFlowJob::$behaviours = [];
     }
 
-
-    protected function tearDown(): void {
-        Carbon::setTestNow();
+    /**
+     * @return void
+     */
+    protected function tearDown(): void
+    {
+        Date::setTestNow();
         StatusFlowJob::$behaviours = [];
 
         parent::tearDown();
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -42,8 +50,11 @@ class StatusPropagationTest extends TestCase {
     |--------------------------------------------------------------------------
     */
 
-
-    public function test_completes_a_single_single_step_task(): void {
+    /**
+     * @return void
+     */
+    public function test_completes_a_single_single_step_task(): void
+    {
         [$workflow] = $this->buildWorkflow([
             'a' => ['steps' => 1],
         ]);
@@ -54,8 +65,11 @@ class StatusPropagationTest extends TestCase {
         $this->assertNotNull($workflow->completed_at);
     }
 
-
-    public function test_completes_a_single_multi_step_task(): void {
+    /**
+     * @return void
+     */
+    public function test_completes_a_single_multi_step_task(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 3],
         ]);
@@ -69,8 +83,11 @@ class StatusPropagationTest extends TestCase {
         }
     }
 
-
-    public function test_completes_a_linear_chain_of_dependent_tasks(): void {
+    /**
+     * @return void
+     */
+    public function test_completes_a_linear_chain_of_dependent_tasks(): void
+    {
         [$workflow, $tasks] = $this->buildWorkflow([
             'a' => ['steps' => 2],
             'b' => ['deps' => ['a'], 'steps' => 2],
@@ -85,8 +102,11 @@ class StatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $tasks['c']->refresh()->status);
     }
 
-
-    public function test_completes_a_diamond_graph(): void {
+    /**
+     * @return void
+     */
+    public function test_completes_a_diamond_graph(): void
+    {
         [$workflow, $tasks] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['deps' => ['a'], 'steps' => 1],
@@ -102,8 +122,11 @@ class StatusPropagationTest extends TestCase {
         }
     }
 
-
-    public function test_completes_when_a_task_finishes_early(): void {
+    /**
+     * @return void
+     */
+    public function test_completes_when_a_task_finishes_early(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 3],
             'b' => ['deps' => ['a'], 'steps' => 1],
@@ -119,15 +142,17 @@ class StatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::COMPLETED, $tasks['b']->refresh()->status);
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | Failing workflows reach FAILED
     |--------------------------------------------------------------------------
     */
 
-
-    public function test_fails_the_workflow_when_a_single_task_fails(): void {
+    /**
+     * @return void
+     */
+    public function test_fails_the_workflow_when_a_single_task_fails(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 2],
         ]);
@@ -139,8 +164,11 @@ class StatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::FAILED, $tasks['a']->refresh()->status);
     }
 
-
-    public function test_fails_the_workflow_and_cancels_downstream_tasks(): void {
+    /**
+     * @return void
+     */
+    public function test_fails_the_workflow_and_cancels_downstream_tasks(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['deps' => ['a'], 'steps' => 1],
@@ -154,8 +182,11 @@ class StatusPropagationTest extends TestCase {
         $this->assertSame(RunStatus::CANCELLED, $tasks['b']->refresh()->status);
     }
 
-
-    public function test_never_leaves_the_workflow_running_once_every_task_is_terminal(): void {
+    /**
+     * @return void
+     */
+    public function test_never_leaves_the_workflow_running_once_every_task_is_terminal(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
             'b' => ['deps' => ['a'], 'steps' => 2],

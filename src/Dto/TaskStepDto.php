@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Dto;
 
-class TaskStepDto {
-
+class TaskStepDto
+{
     /**
      * @param int $order
      * @param object $job
@@ -11,6 +13,5 @@ class TaskStepDto {
     public function __construct(
         public int $order,
         public object $job,
-    ) {
-    }
+    ) {}
 }

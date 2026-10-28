@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Definitions;
 
-class Task {
-
+class Task
+{
     /**
      * @param string $name
      * @param object|array<int, object> $jobs
@@ -13,6 +15,5 @@ class Task {
         public string $name,
         public object|array $jobs,
         public string|array $dependsOn = [],
-    ) {
-    }
+    ) {}
 }

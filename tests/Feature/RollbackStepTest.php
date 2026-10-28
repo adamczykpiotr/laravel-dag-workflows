@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
 use AdamczykPiotr\DagWorkflows\Tests\TestCase;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
 
 /**
@@ -12,23 +14,30 @@ use Illuminate\Support\Facades\Queue;
  * middleware must invoke rollbackStep() right before handle() whenever a previous
  * attempt of the step already ran — and never on the first attempt.
  */
-class RollbackStepTest extends TestCase {
-
+class RollbackStepTest extends TestCase
+{
     use InteractsWithStatusFlow;
 
-    protected function setUp(): void {
+    /**
+     * @return void
+     */
+    protected function setUp(): void
+    {
         parent::setUp();
 
-        Carbon::setTestNow('2026-07-15 12:00:00');
+        Date::setTestNow('2026-07-15 12:00:00');
         Queue::fake();
         StatusFlowJob::$behaviours = [];
         StatusFlowJob::$executionLog = [];
         StatusFlowJob::$rollbackStepLog = [];
     }
 
-
-    protected function tearDown(): void {
-        Carbon::setTestNow();
+    /**
+     * @return void
+     */
+    protected function tearDown(): void
+    {
+        Date::setTestNow();
         StatusFlowJob::$behaviours = [];
         StatusFlowJob::$executionLog = [];
         StatusFlowJob::$rollbackStepLog = [];
@@ -36,8 +45,11 @@ class RollbackStepTest extends TestCase {
         parent::tearDown();
     }
 
-
-    public function test_rollback_step_does_not_run_on_first_attempts(): void {
+    /**
+     * @return void
+     */
+    public function test_rollback_step_does_not_run_on_first_attempts(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 2],
         ]);
@@ -50,8 +62,11 @@ class RollbackStepTest extends TestCase {
         $this->assertSame(1, $this->freshStep($steps['a'][2])->attempts);
     }
 
-
-    public function test_rollback_step_runs_before_handle_when_retrying_a_failed_step(): void {
+    /**
+     * @return void
+     */
+    public function test_rollback_step_runs_before_handle_when_retrying_a_failed_step(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
         ]);
@@ -72,8 +87,11 @@ class RollbackStepTest extends TestCase {
         $this->assertSame(2, $this->freshStep($steps['a'][1])->attempts);
     }
 
-
-    public function test_a_throwing_rollback_step_fails_the_step_without_running_handle(): void {
+    /**
+     * @return void
+     */
+    public function test_a_throwing_rollback_step_fails_the_step_without_running_handle(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
         ]);
@@ -95,8 +113,11 @@ class RollbackStepTest extends TestCase {
         $this->assertSame([$stepId], StatusFlowJob::$executionLog);
     }
 
-
-    public function test_upstream_retry_rolls_back_only_steps_that_already_ran(): void {
+    /**
+     * @return void
+     */
+    public function test_upstream_retry_rolls_back_only_steps_that_already_ran(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 3],
         ]);
@@ -121,8 +142,11 @@ class RollbackStepTest extends TestCase {
         );
     }
 
-
-    public function test_rollback_step_does_not_run_for_a_stale_duplicate_delivery(): void {
+    /**
+     * @return void
+     */
+    public function test_rollback_step_does_not_run_for_a_stale_duplicate_delivery(): void
+    {
         [$workflow, $tasks, $steps] = $this->buildWorkflow([
             'a' => ['steps' => 1],
         ]);

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Middlewares;
 
 use AdamczykPiotr\DagWorkflows\Enums\RunStatus;
@@ -10,24 +12,25 @@ use Closure;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
-class DagWorkflowTrackerJobMiddleware {
-
+class DagWorkflowTrackerJobMiddleware
+{
     /**
      * @param WorkflowDispatcher $dispatcher
      */
     public function __construct(
         protected WorkflowDispatcher $dispatcher,
-    ) {
-    }
-
+    ) {}
 
     /**
      * @param object $job
      * @param Closure $next
+     *
      * @return mixed
+     *
      * @throws Throwable
      */
-    public function handle(object $job, Closure $next): mixed {
+    public function handle(object $job, Closure $next): mixed
+    {
         // Skip middleware execution for jobs without injected $workflowTaskStep
         if (property_exists($job, 'workflowTaskStep') === false || $job->workflowTaskStep instanceof WorkflowTaskStep === false) {
             return $next($job);
@@ -80,12 +83,13 @@ class DagWorkflowTrackerJobMiddleware {
         }
     }
 
-
     /**
      * @param WorkflowTaskStep $step
+     *
      * @return void
      */
-    protected function redispatchDependantsOfCompletedTask(WorkflowTaskStep $step): void {
+    protected function redispatchDependantsOfCompletedTask(WorkflowTaskStep $step): void
+    {
         $step->refresh();
 
         if ($step->status !== RunStatus::COMPLETED) {
@@ -102,16 +106,18 @@ class DagWorkflowTrackerJobMiddleware {
         $this->dispatcher->finalizeWorkflowStatus($task->workflow);
     }
 
-
     /**
      * Atomically claim the step (PENDING -> RUNNING). Returns false when another
      * delivery of the same step already claimed or processed it.
      *
      * @param WorkflowTaskStep $step
+     *
      * @return bool
+     *
      * @throws Throwable
      */
-    protected function beginWorkflowTaskStep(WorkflowTaskStep $step): bool {
+    protected function beginWorkflowTaskStep(WorkflowTaskStep $step): bool
+    {
         $startedAt = now();
 
         $claimed = WorkflowTaskStep::query()
@@ -143,7 +149,7 @@ class DagWorkflowTrackerJobMiddleware {
             return true;
         }
 
-        DB::transaction(function() use ($step) {
+        DB::transaction(function() use ($step): void {
             $task = $step->task;
             $task->status = RunStatus::RUNNING;
             $task->started_at = now();
@@ -164,13 +170,15 @@ class DagWorkflowTrackerJobMiddleware {
         return true;
     }
 
-
     /**
      * @param WorkflowTaskStep $step
+     *
      * @return void
+     *
      * @throws Throwable
      */
-    protected function completeWorkflowTaskStep(WorkflowTaskStep $step): void {
+    protected function completeWorkflowTaskStep(WorkflowTaskStep $step): void
+    {
         $step->refresh();
 
         // If step was paused during execution (approval required), don't auto-complete

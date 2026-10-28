@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace AdamczykPiotr\DagWorkflows\Facades;
 
 use Illuminate\Support\Facades\Facade;
@@ -9,6 +11,9 @@ use Illuminate\Support\Facades\Facade;
  */
 class DagWorkflows extends Facade
 {
+    /**
+     * @return string
+     */
     protected static function getFacadeAccessor(): string
     {
         return \AdamczykPiotr\DagWorkflows\DagWorkflows::class;

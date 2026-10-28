@@ -274,11 +274,11 @@ composer analyse
 
 ## Code style
 
-Code is formatted with [laravel-ultimate-formatter](https://github.com/adamczykpiotr/laravel-ultimate-formatter), which runs Rector and then PHP CS Fixer:
+Code is formatted with [laravel-ultimate-formatter](https://github.com/adamczykpiotr/laravel-ultimate-formatter):
 
 ```bash
-composer format   # apply Rector and PHP CS Fixer
-composer check    # dry run, used by the code-style workflow
+composer format   # format the code
+composer check    # report unformatted code without changing it (CI)
 ```
 
 ## Contributing

@@ -12,6 +12,7 @@
 /workbench          export-ignore
 /.editorconfig      export-ignore
 /.php_cs.dist.php   export-ignore
+/.releaserc.json    export-ignore
 /psalm.xml          export-ignore
 /psalm.xml.dist     export-ignore
 /testbench.yaml     export-ignore
